@@ -29,14 +29,14 @@ st.markdown("""
 
     /* Headers */
     h1 {
-        font-size: 2rem !important;
+        font-size: 1.75rem !important;
         font-weight: 600 !important;
-        letter-spacing: -0.5px !important;
+        letter-spacing: -0.3px !important;
         color: #1d1d1f !important;
-        margin-bottom: 0.25rem !important;
+        margin-bottom: 0.5rem !important;
         margin-top: 0 !important;
         padding-top: 0 !important;
-        line-height: 1.2 !important;
+        line-height: 1.3 !important;
     }
 
     h2 {
@@ -79,7 +79,7 @@ st.markdown("""
 
     /* Compact layout */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 2.5rem !important;
         padding-bottom: 1rem !important;
         max-width: 1200px !important;
     }
