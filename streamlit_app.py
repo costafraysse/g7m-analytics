@@ -423,13 +423,93 @@ def create_rte_map(snapshot_data, center_lat=46.603354, center_lon=1.888334, zoo
     return m
 
 
-def create_rte_changes_map(changes_data, snapshot_data, center_lat=46.603354, center_lon=1.888334, zoom_start=6):
+def compare_two_snapshots(snapshot1, snapshot2):
+    """
+    Compare two arbitrary snapshots and return changes.
+
+    Args:
+        snapshot1: Earlier snapshot dict
+        snapshot2: Later snapshot dict
+
+    Returns:
+        Changes dict with added, removed, and modified substations
+    """
+    if not snapshot1 or not snapshot2:
+        return None
+
+    # Index substations by IDRPoste for comparison
+    subs1 = {
+        sub['properties']['IDRPoste']: sub
+        for sub in snapshot1.get('substations', [])
+    }
+    subs2 = {
+        sub['properties']['IDRPoste']: sub
+        for sub in snapshot2.get('substations', [])
+    }
+
+    # Find added and removed
+    ids1 = set(subs1.keys())
+    ids2 = set(subs2.keys())
+
+    added_ids = ids2 - ids1
+    removed_ids = ids1 - ids2
+    common_ids = ids1 & ids2
+
+    # Find modified
+    modified = []
+    for sub_id in common_ids:
+        props1 = subs1[sub_id]['properties']
+        props2 = subs2[sub_id]['properties']
+
+        # Check if capacity fields changed
+        if (props1.get('CapaciteSansContrainte') != props2.get('CapaciteSansContrainte') or
+            props1.get('CapacitePosteGabarit') != props2.get('CapacitePosteGabarit') or
+            props1.get('Gabarit') != props2.get('Gabarit') or
+            props1.get('DemandeProximite') != props2.get('DemandeProximite')):
+
+            modified.append({
+                'IDRPoste': sub_id,
+                'ADRPoste': props2.get('ADRPoste'),
+                'NomCommune': props2.get('NomCommune'),
+                'changes': {
+                    'CapaciteSansContrainte': {
+                        'old': props1.get('CapaciteSansContrainte'),
+                        'new': props2.get('CapaciteSansContrainte')
+                    },
+                    'CapacitePosteGabarit': {
+                        'old': props1.get('CapacitePosteGabarit'),
+                        'new': props2.get('CapacitePosteGabarit')
+                    },
+                    'Gabarit': {
+                        'old': props1.get('Gabarit'),
+                        'new': props2.get('Gabarit')
+                    },
+                    'DemandeProximite': {
+                        'old': props1.get('DemandeProximite'),
+                        'new': props2.get('DemandeProximite')
+                    }
+                }
+            })
+
+    return {
+        'date': snapshot2.get('date'),
+        'added': len(added_ids),
+        'removed': len(removed_ids),
+        'modified': modified,
+        'added_substations': [subs2[sid]['properties'] for sid in added_ids],
+        'removed_substations': [subs1[sid]['properties'] for sid in removed_ids],
+        'summary': f"{len(added_ids)} added, {len(removed_ids)} removed, {len(modified)} modified"
+    }
+
+
+def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=None, center_lat=46.603354, center_lon=1.888334, zoom_start=6):
     """
     Create a Folium map showing only substations that changed.
 
     Args:
         changes_data: Changes dict with 'modified', 'added_substations', 'removed_substations'
         snapshot_data: Current snapshot for coordinate lookup
+        previous_snapshot_data: Previous snapshot for removed substations coordinates
         center_lat: Map center latitude
         center_lon: Map center longitude
         zoom_start: Initial zoom level
@@ -455,6 +535,15 @@ def create_rte_changes_map(changes_data, snapshot_data, center_lat=46.603354, ce
             props = feature.get('properties', {})
             sub_id = props.get('IDRPoste')
             if sub_id and len(coords) >= 2:
+                substation_coords[sub_id] = (coords[1], coords[0])  # lat, lon
+
+    # Also index previous snapshot for removed substations
+    if previous_snapshot_data and 'substations' in previous_snapshot_data:
+        for feature in previous_snapshot_data['substations']:
+            coords = feature.get('geometry', {}).get('coordinates', [])
+            props = feature.get('properties', {})
+            sub_id = props.get('IDRPoste')
+            if sub_id and len(coords) >= 2 and sub_id not in substation_coords:
                 substation_coords[sub_id] = (coords[1], coords[0])  # lat, lon
 
     # Add modified substations (blue)
@@ -519,11 +608,31 @@ def create_rte_changes_map(changes_data, snapshot_data, center_lat=46.603354, ce
                 tooltip=f"Nouveau: {sub.get('NomCommune', 'N/A')}"
             ).add_to(m)
 
-    # Add removed substations (red) - need to get coords from somewhere
+    # Add removed substations (red)
     for sub in changes_data.get('removed_substations', []):
-        # Note: Removed substations won't be in current snapshot
-        # We'd need to look in previous snapshot or store coords in change log
-        pass
+        sub_id = sub.get('IDRPoste')
+        if sub_id in substation_coords:
+            lat, lon = substation_coords[sub_id]
+
+            popup_html = f"""
+            <div style="font-family: sans-serif; min-width: 200px;">
+                <h4 style="margin-bottom: 5px; color: red;">SUPPRIMÉ</h4>
+                <p style="margin: 2px 0;"><strong>Poste:</strong> {sub.get('ADRPoste', 'N/A')}</p>
+                <p style="margin: 2px 0;"><strong>Commune:</strong> {sub.get('NomCommune', 'N/A')}</p>
+                <p style="margin: 2px 0;"><strong>Capacité:</strong> {sub.get('CapaciteSansContrainte', 'N/A')}</p>
+            </div>
+            """
+
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=8,
+                color='red',
+                fill=True,
+                fillColor='red',
+                fillOpacity=0.8,
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=f"Supprimé: {sub.get('NomCommune', 'N/A')}"
+            ).add_to(m)
 
     return m
 
@@ -661,27 +770,11 @@ if rte_data and rte_data.get('snapshots'):
             latest_change = rte_data['change_log'][-1]
             st.caption(f"Dernier: {latest_change['summary']}")
 
-    # Date slider for navigating snapshots
+    # Date selection for state map and comparison
     st.markdown("")
     snapshots = rte_data['snapshots']
     snapshot_dates = [datetime.fromisoformat(s['date'].replace('Z', '+00:00')) for s in snapshots]
-
-    if len(snapshot_dates) > 1:
-        selected_idx = st.slider(
-            "Sélectionner une date",
-            min_value=0,
-            max_value=len(snapshots) - 1,
-            value=len(snapshots) - 1,
-            format=""
-        )
-        selected_date = snapshot_dates[selected_idx]
-        st.caption(f"📅 Snapshot du {selected_date.strftime('%d/%m/%Y à %H:%M')} UTC")
-    else:
-        selected_idx = 0
-        selected_date = snapshot_dates[0] if snapshot_dates else None
-        st.info(f"📅 Snapshot unique du {selected_date.strftime('%d/%m/%Y à %H:%M')} UTC")
-
-    selected_snapshot = snapshots[selected_idx]
+    date_labels = [d.strftime('%d/%m/%Y %H:%M') for d in snapshot_dates]
 
     # Two columns for the two maps
     st.markdown("")
@@ -691,9 +784,24 @@ if rte_data and rte_data.get('snapshots'):
         st.markdown("### État des Postes")
         st.caption("Vue d'ensemble de tous les postes et leur capacité disponible")
 
+        # Date selector for state map
+        if len(snapshot_dates) > 1:
+            state_date_idx = st.selectbox(
+                "📅 Date pour l'état:",
+                options=range(len(snapshots)),
+                format_func=lambda i: date_labels[i],
+                index=len(snapshots) - 1,
+                key="state_date"
+            )
+        else:
+            state_date_idx = 0
+            st.info(f"📅 Snapshot unique du {date_labels[0]} UTC")
+
+        selected_snapshot = snapshots[state_date_idx]
+
         # Create and display state map
         state_map = create_rte_map(selected_snapshot)
-        st_folium(state_map, width=550, height=500, key=f"state_map_{selected_idx}")
+        st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
 
         # Legend
         st.markdown("""
@@ -707,28 +815,57 @@ if rte_data and rte_data.get('snapshots'):
 
     with col_map2:
         st.markdown("### Changements")
-        st.caption("Modifications par rapport au snapshot précédent")
+        st.caption("Comparer deux dates pour voir les changements")
 
-        # Get changes for selected snapshot
-        if selected_idx > 0 and rte_data.get('change_log'):
-            selected_changes = rte_data['change_log'][selected_idx]
+        # Date comparison selectors
+        if len(snapshot_dates) > 1:
+            col_date1, col_date2 = st.columns(2)
 
-            if selected_changes.get('added') > 0 or selected_changes.get('removed') > 0 or len(selected_changes.get('modified', [])) > 0:
-                # Create and display changes map
-                changes_map = create_rte_changes_map(selected_changes, selected_snapshot)
-                st_folium(changes_map, width=550, height=500, key=f"changes_map_{selected_idx}")
+            with col_date1:
+                date1_idx = st.selectbox(
+                    "📅 Date 1 (avant):",
+                    options=range(len(snapshots)),
+                    format_func=lambda i: date_labels[i],
+                    index=max(0, len(snapshots) - 2),
+                    key="compare_date1"
+                )
 
-                # Summary
-                st.markdown(f"""
-                **Résumé:**
-                - ✅ Ajoutés: {selected_changes['added']}
-                - ❌ Supprimés: {selected_changes['removed']}
-                - 🔄 Modifiés: {len(selected_changes.get('modified', []))}
-                """)
+            with col_date2:
+                date2_idx = st.selectbox(
+                    "📅 Date 2 (après):",
+                    options=range(len(snapshots)),
+                    format_func=lambda i: date_labels[i],
+                    index=len(snapshots) - 1,
+                    key="compare_date2"
+                )
+
+            if date1_idx == date2_idx:
+                st.warning("⚠️ Veuillez sélectionner deux dates différentes pour la comparaison")
             else:
-                st.info("Aucun changement détecté pour ce snapshot")
+                # Compare the two selected snapshots
+                snapshot1 = snapshots[date1_idx]
+                snapshot2 = snapshots[date2_idx]
+
+                comparison_changes = compare_two_snapshots(snapshot1, snapshot2)
+
+                if comparison_changes and (comparison_changes.get('added') > 0 or
+                                          comparison_changes.get('removed') > 0 or
+                                          len(comparison_changes.get('modified', [])) > 0):
+                    # Create and display changes map
+                    changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
+                    st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
+
+                    # Summary
+                    st.markdown(f"""
+                    **Résumé:**
+                    - ✅ Ajoutés: {comparison_changes['added']}
+                    - ❌ Supprimés: {comparison_changes['removed']}
+                    - 🔄 Modifiés: {len(comparison_changes.get('modified', []))}
+                    """)
+                else:
+                    st.info("Aucun changement détecté entre ces deux dates")
         else:
-            st.info("Premier snapshot - aucune comparaison disponible")
+            st.info("Un seul snapshot disponible - attendez la prochaine collecte pour voir les changements")
 
         # Legend for changes
         st.markdown("""
@@ -739,15 +876,15 @@ if rte_data and rte_data.get('snapshots'):
         """)
 
     # Changes table
-    if selected_idx > 0 and rte_data.get('change_log'):
-        selected_changes = rte_data['change_log'][selected_idx]
+    if len(snapshot_dates) > 1 and 'date1_idx' in locals() and 'date2_idx' in locals() and date1_idx != date2_idx:
+        comparison_changes = compare_two_snapshots(snapshots[date1_idx], snapshots[date2_idx])
 
-        if len(selected_changes.get('modified', [])) > 0:
+        if comparison_changes and len(comparison_changes.get('modified', [])) > 0:
             st.markdown("")
             st.markdown("### Détails des Modifications")
 
             changes_list = []
-            for change in selected_changes['modified']:
+            for change in comparison_changes['modified']:
                 for field, vals in change.get('changes', {}).items():
                     if vals['old'] != vals['new']:
                         changes_list.append({
@@ -767,4 +904,4 @@ else:
 
 # Footer
 st.markdown("")
-st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement chaque semaine")
+st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement **chaque lundi à 6h30 UTC**")
