@@ -109,16 +109,16 @@ def check_password():
         return True
 
     # Show password input
-    st.markdown("### Authentication Required")
+    st.markdown("### Authentification Requise")
     st.text_input(
-        "Enter password to access the dashboard",
+        "Entrez le mot de passe pour accéder au tableau de bord",
         type="password",
         on_change=password_entered,
         key="password"
     )
 
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("Incorrect password. Please try again.")
+        st.error("Mot de passe incorrect. Veuillez réessayer.")
 
     return False
 
@@ -288,8 +288,8 @@ def plot_stacked_bar(df, title, emoji):
 data = load_data()
 
 # Header
-st.title("Enedis Grid Analysis")
-st.markdown("### Renewable energy projects awaiting connection")
+st.title("Analyse de la File d'Attente Enedis")
+st.markdown("### Projets d'énergies renouvelables en attente de raccordement")
 
 # Data freshness indicator
 st.markdown("---")
@@ -304,80 +304,80 @@ days_since_generated = (now - generated_at).days
 
 # Source data freshness
 if days_since_source <= 7:
-    status_text = "Recent data"
+    status_text = "Données récentes"
 elif days_since_source <= 45:
-    status_text = "Up to date"
+    status_text = "Données à jour"
 elif days_since_source <= 90:
-    status_text = "Potentially outdated"
+    status_text = "Potentiellement obsolètes"
 else:
-    status_text = "Outdated (>3 months)"
+    status_text = "Données anciennes (>3 mois)"
 
 with col1:
     st.metric(
-        "Data Status",
+        "Statut des Données",
         status_text,
         delta=None
     )
-    st.caption(f"Last Enedis update: {source_last_update.strftime('%B %d, %Y')}")
+    st.caption(f"Dernière mise à jour Enedis : {source_last_update.strftime('%d/%m/%Y')}")
 
 with col2:
     st.metric(
-        "Last Collection",
-        f"{days_since_generated} day{'s' if days_since_generated != 1 else ''} ago",
+        "Dernière Collecte",
+        f"Il y a {days_since_generated} jour{'s' if days_since_generated > 1 else ''}",
         delta=None
     )
-    st.caption(f"{generated_at.strftime('%B %d, %Y at %H:%M')} UTC")
+    st.caption(f"{generated_at.strftime('%d/%m/%Y à %H:%M')} UTC")
 
 with col3:
     st.metric(
-        "Records",
+        "Enregistrements",
         f"{data['metadata']['renewable_records']:,}",
         delta=None
     )
-    st.caption(f"Out of {data['metadata']['total_records']:,} total")
+    st.caption(f"Sur {data['metadata']['total_records']:,} total")
 
 st.markdown("---")
 
 # Photovoltaic section
-st.markdown("## Solar")
-st.markdown("Quarterly cumulative queue")
+st.markdown("## Photovoltaïque")
+st.markdown("Cumul trimestriel des projets en file d'attente")
 
 df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
 if not df_pv.empty:
     fig_pv, total_pv = plot_stacked_bar(
         df_pv,
-        "Solar",
+        "Photovoltaïque",
         ""
     )
     st.plotly_chart(fig_pv, use_container_width=True)
-    st.info(f"**Latest quarter:** {total_pv:.2f} GW in queue")
+    st.info(f"**Dernier trimestre :** {total_pv:.2f} GW en file d'attente")
 else:
-    st.warning("No solar data available")
+    st.warning("Aucune donnée photovoltaïque disponible")
 
 st.markdown("---")
 
 # Wind section
-st.markdown("## Wind")
-st.markdown("Quarterly cumulative queue")
+st.markdown("## Éolien")
+st.markdown("Cumul trimestriel des projets en file d'attente")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
     fig_wind, total_wind = plot_stacked_bar(
         df_wind,
-        "Wind",
+        "Éolien",
         ""
     )
     st.plotly_chart(fig_wind, use_container_width=True)
-    st.info(f"**Latest quarter:** {total_wind:.2f} GW in queue")
+    st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
 else:
-    st.warning("No wind data available")
+    st.warning("Aucune donnée éolienne disponible")
 
 # Combined total
 if not df_pv.empty and not df_wind.empty:
     st.markdown("---")
-    st.markdown(f"### Combined Total: **{total_pv + total_wind:.2f} GW**")
+    st.markdown(f"### Total Combiné : **{total_pv + total_wind:.2f} GW**")
 
 # Footer
 st.markdown("---")
-st.caption(f"Source: [Enedis Open Data]({data['metadata']['api_url']})")
-st.caption("Data processed automatically every week")
+st.caption(f"Source : [Enedis Open Data]({data['metadata']['api_url']})")
+st.caption("Données traitées automatiquement chaque semaine")
