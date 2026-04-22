@@ -352,11 +352,12 @@ with col2:
 
 with col3:
     st.metric(
-        "Enregistrements",
+        "Projets Renouvelables",
         f"{data['metadata']['renewable_records']:,}",
-        delta=None
+        delta=None,
+        help="Nombre de projets photovoltaïques et éoliens en file d'attente de raccordement au réseau Enedis"
     )
-    st.caption(f"Sur {data['metadata']['total_records']:,} total")
+    st.caption(f"Sur {data['metadata']['total_records']:,} projets au total")
 
 # Photovoltaic section
 st.markdown("## Photovoltaïque")
