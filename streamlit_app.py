@@ -32,19 +32,23 @@ st.markdown("""
         font-weight: 600 !important;
         letter-spacing: -0.5px !important;
         color: #1d1d1f !important;
-        margin-bottom: 0.5rem !important;
+        margin-bottom: 0.25rem !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 
     h2 {
         font-weight: 600 !important;
         color: #1d1d1f !important;
-        margin-top: 3rem !important;
-        margin-bottom: 1rem !important;
+        margin-top: 1.5rem !important;
+        margin-bottom: 0.5rem !important;
     }
 
     h3 {
         font-weight: 500 !important;
         color: #6e6e73 !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.5rem !important;
     }
 
     /* Metrics */
@@ -60,11 +64,26 @@ st.markdown("""
         color: #6e6e73 !important;
     }
 
-    /* Remove excessive padding */
+    /* Compact layout */
     .block-container {
-        padding-top: 3rem !important;
-        padding-bottom: 3rem !important;
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
         max-width: 1200px !important;
+    }
+
+    /* Reduce spacing between elements */
+    .stMarkdown {
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Compact metrics */
+    [data-testid="stMetric"] {
+        padding: 0.5rem 0 !important;
+    }
+
+    /* Reduce horizontal rule spacing */
+    hr {
+        margin: 1rem 0 !important;
     }
 
     /* Info boxes */
@@ -266,11 +285,11 @@ def plot_stacked_bar(df, title, emoji):
             bordercolor='rgba(0,0,0,0)',
             font=dict(size=11, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
         ),
-        height=500,
+        height=400,
         hovermode='x unified',
         plot_bgcolor='white',
         paper_bgcolor='white',
-        margin=dict(t=20, r=20, b=140, l=60),
+        margin=dict(t=10, r=20, b=120, l=50),
         font=dict(family='SF Pro Display, -apple-system, sans-serif')
     )
 
@@ -289,10 +308,10 @@ data = load_data()
 
 # Header
 st.title("Analyse de la File d'Attente Enedis")
-st.markdown("### Projets d'énergies renouvelables en attente de raccordement")
+st.markdown("Projets d'énergies renouvelables en attente de raccordement")
 
 # Data freshness indicator
-st.markdown("---")
+st.markdown("")
 col1, col2, col3 = st.columns(3)
 
 source_last_update = datetime.fromisoformat(data['source_last_update'].replace('Z', '+00:00'))
@@ -336,11 +355,8 @@ with col3:
     )
     st.caption(f"Sur {data['metadata']['total_records']:,} total")
 
-st.markdown("---")
-
 # Photovoltaic section
 st.markdown("## Photovoltaïque")
-st.markdown("Cumul trimestriel des projets en file d'attente")
 
 df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
 if not df_pv.empty:
@@ -354,11 +370,8 @@ if not df_pv.empty:
 else:
     st.warning("Aucune donnée photovoltaïque disponible")
 
-st.markdown("---")
-
 # Wind section
 st.markdown("## Éolien")
-st.markdown("Cumul trimestriel des projets en file d'attente")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
@@ -374,10 +387,8 @@ else:
 
 # Combined total
 if not df_pv.empty and not df_wind.empty:
-    st.markdown("---")
     st.markdown(f"### Total Combiné : **{total_pv + total_wind:.2f} GW**")
 
 # Footer
-st.markdown("---")
-st.caption(f"Source : [Enedis Open Data]({data['metadata']['api_url']})")
-st.caption("Données traitées automatiquement chaque semaine")
+st.markdown("")
+st.caption(f"Source : [Enedis Open Data]({data['metadata']['api_url']}) • Données traitées automatiquement chaque semaine")
