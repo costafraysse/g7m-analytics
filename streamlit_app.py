@@ -5,8 +5,6 @@ Visualizes renewable energy project queue data from Enedis.
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import requests
 import hmac
 from datetime import datetime, timezone
@@ -137,49 +135,14 @@ def create_dataframe_from_data(data_dict):
 
 
 def plot_stacked_bar(df, title, emoji):
-    """Create stacked bar chart."""
-    fig, ax = plt.subplots(figsize=(16, 10))
+    """Create stacked bar chart using Streamlit's native charting."""
+    if df.empty:
+        return None, 0
 
-    x_pos = np.arange(len(df))
-    bottom = np.zeros(len(df))
+    # Calculate total for last quarter
+    total = df.iloc[-1].sum() if len(df) > 0 else 0
 
-    # Create stacked bars
-    for cat in CATEGORY_ORDER:
-        if cat in df.columns:
-            values = df[cat].values
-            ax.bar(
-                x_pos, values, 0.6,
-                bottom=bottom,
-                label=cat,
-                color=COLORS.get(cat, '#CCC'),
-                edgecolor='white',
-                linewidth=0.5
-            )
-            bottom += values
-
-    # Add total labels on top of bars
-    for i, total in enumerate(bottom):
-        ax.text(
-            i, total + 0.3,
-            f'{total:.2f}',
-            ha='center', va='bottom',
-            fontsize=9, fontweight='bold'
-        )
-
-    # Styling
-    ax.set_xlabel('Trimestre', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Puissance (GW)', fontsize=12, fontweight='bold')
-    ax.set_title(f'{emoji} {title}', fontsize=16, fontweight='bold', pad=20)
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(df.index, rotation=0, ha='center')
-    ax.set_ylim(0, max(bottom) * 1.1 if len(bottom) > 0 else 1)
-    ax.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.5)
-    ax.legend(loc='upper left', framealpha=0.9, fontsize=9)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-
-    plt.tight_layout()
-    return fig, bottom[-1] if len(bottom) > 0 else 0
+    return df, total
 
 
 # ============================================================================
@@ -250,12 +213,12 @@ st.markdown("#### Cumul trimestriel des projets en file d'attente")
 
 df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
 if not df_pv.empty:
-    fig_pv, total_pv = plot_stacked_bar(
+    chart_df, total_pv = plot_stacked_bar(
         df_pv,
         "Photovoltaïque - Cumul trimestriel des projets en file d'attente",
         "🌞"
     )
-    st.pyplot(fig_pv)
+    st.bar_chart(chart_df, color=list(COLORS.values())[:len(chart_df.columns)], height=500)
     st.info(f"**Dernier trimestre:** {total_pv:.2f} GW en file d'attente")
 else:
     st.warning("Aucune donnée photovoltaïque disponible")
@@ -268,12 +231,12 @@ st.markdown("#### Cumul trimestriel des projets en file d'attente")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
-    fig_wind, total_wind = plot_stacked_bar(
+    chart_df, total_wind = plot_stacked_bar(
         df_wind,
         "Éolien - Cumul trimestriel des projets en file d'attente",
         "💨"
     )
-    st.pyplot(fig_wind)
+    st.bar_chart(chart_df, color=list(COLORS.values())[:len(chart_df.columns)], height=500)
     st.info(f"**Dernier trimestre:** {total_wind:.2f} GW en file d'attente")
 else:
     st.warning("Aucune donnée éolienne disponible")
