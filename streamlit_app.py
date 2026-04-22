@@ -799,9 +799,10 @@ if rte_data and rte_data.get('snapshots'):
 
         selected_snapshot = snapshots[state_date_idx]
 
-        # Create and display state map
-        state_map = create_rte_map(selected_snapshot)
-        st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
+        # Create and display state map with loading indicator
+        with st.spinner('Chargement de la carte...'):
+            state_map = create_rte_map(selected_snapshot)
+            st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
 
         # Legend
         st.markdown("""
@@ -851,9 +852,10 @@ if rte_data and rte_data.get('snapshots'):
                 if comparison_changes and (comparison_changes.get('added') > 0 or
                                           comparison_changes.get('removed') > 0 or
                                           len(comparison_changes.get('modified', [])) > 0):
-                    # Create and display changes map
-                    changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
-                    st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
+                    # Create and display changes map with loading indicator
+                    with st.spinner('Calcul des changements...'):
+                        changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
+                        st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
 
                     # Summary
                     st.markdown(f"""
