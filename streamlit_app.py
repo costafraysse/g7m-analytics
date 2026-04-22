@@ -224,7 +224,7 @@ def create_dataframe_from_data(data_dict):
     return df
 
 
-def plot_stacked_bar(df, title, emoji):
+def plot_stacked_bar(df):
     """Create interactive stacked bar chart with Plotly."""
     if df.empty:
         return None, 0
@@ -360,11 +360,7 @@ st.markdown("## Photovoltaïque")
 
 df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
 if not df_pv.empty:
-    fig_pv, total_pv = plot_stacked_bar(
-        df_pv,
-        "Photovoltaïque",
-        ""
-    )
+    fig_pv, total_pv = plot_stacked_bar(df_pv)
     st.plotly_chart(fig_pv, use_container_width=True)
     st.info(f"**Dernier trimestre :** {total_pv:.2f} GW en file d'attente")
 else:
@@ -375,11 +371,7 @@ st.markdown("## Éolien")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
-    fig_wind, total_wind = plot_stacked_bar(
-        df_wind,
-        "Éolien",
-        ""
-    )
+    fig_wind, total_wind = plot_stacked_bar(df_wind)
     st.plotly_chart(fig_wind, use_container_width=True)
     st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
 else:
