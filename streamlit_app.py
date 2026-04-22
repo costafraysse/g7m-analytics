@@ -216,9 +216,9 @@ def plot_stacked_bar(df, title, emoji):
     # Create Plotly figure
     fig = go.Figure()
 
-    # Add a bar trace for each category
+    # Add a bar trace for each category (only if it has non-zero data)
     for cat in CATEGORY_ORDER:
-        if cat in df.columns:
+        if cat in df.columns and df[cat].sum() > 0:  # Only show if there's actual data
             fig.add_trace(go.Bar(
                 name=cat,
                 x=df.index,
@@ -244,7 +244,7 @@ def plot_stacked_bar(df, title, emoji):
         title=None,  # Remove chart title, use section headers instead
         xaxis=dict(
             title=None,
-            tickangle=0,
+            tickangle=-45,
             showgrid=False,
             showline=False,
             tickfont=dict(size=12, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
@@ -266,11 +266,11 @@ def plot_stacked_bar(df, title, emoji):
             bordercolor='rgba(0,0,0,0)',
             font=dict(size=11, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
         ),
-        height=450,
+        height=500,
         hovermode='x unified',
         plot_bgcolor='white',
         paper_bgcolor='white',
-        margin=dict(t=20, r=20, b=120, l=60),
+        margin=dict(t=20, r=20, b=140, l=60),
         font=dict(family='SF Pro Display, -apple-system, sans-serif')
     )
 
