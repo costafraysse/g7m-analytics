@@ -8,7 +8,7 @@ import pandas as pd
 import requests
 import hmac
 from datetime import datetime, timezone
-import plotly.graph_objects as go
+import altair as alt
 
 
 # Page configuration
@@ -151,7 +151,7 @@ if not check_password():
 # DATA LOADING
 # ============================================================================
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def load_data():
     """Load data from GitHub Gist or local file."""
     try:
@@ -225,78 +225,81 @@ def create_dataframe_from_data(data_dict):
 
 
 def plot_stacked_bar(df):
-    """Create interactive stacked bar chart with Plotly."""
+    """Create interactive stacked bar chart with Altair."""
     if df.empty:
         return None, 0
 
     # Calculate totals for each quarter
-    totals = df.sum(axis=1).values
+    totals = df.sum(axis=1)
 
-    # Create Plotly figure
-    fig = go.Figure()
+    # Convert to long format for Altair (only include categories with data)
+    df_long = df.reset_index().melt(
+        id_vars='quarter',
+        var_name='Catégorie',
+        value_name='Puissance'
+    )
 
-    # Add a bar trace for each category (only if it has non-zero data)
-    for cat in CATEGORY_ORDER:
-        if cat in df.columns and df[cat].sum() > 0:  # Only show if there's actual data
-            fig.add_trace(go.Bar(
-                name=cat,
-                x=df.index,
-                y=df[cat],
-                marker_color=COLORS.get(cat, '#CCC'),
-                hovertemplate='<b>%{x}</b><br>' + cat + ': %{y:.2f} GW<extra></extra>'
-            ))
+    # Filter out categories with zero data
+    df_long = df_long[df_long.groupby('Catégorie')['Puissance'].transform('sum') > 0]
 
-    # Add text annotations on top of bars showing totals
-    for i, (quarter, total) in enumerate(zip(df.index, totals)):
-        fig.add_annotation(
-            x=quarter,
-            y=total,
-            text=f'{total:.1f}',
-            showarrow=False,
-            font=dict(size=11, color='#1d1d1f', family='SF Pro Display, -apple-system, sans-serif', weight=600),
-            yshift=10
-        )
+    # Create totals dataframe for labels
+    df_totals = pd.DataFrame({
+        'quarter': totals.index,
+        'total': totals.values
+    })
 
-    # Update layout - clean, Apple-like design
-    fig.update_layout(
-        barmode='stack',
-        title=None,  # Remove chart title, use section headers instead
-        xaxis=dict(
-            title=None,
-            tickangle=-45,
-            showgrid=False,
-            showline=False,
-            tickfont=dict(size=12, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
-        ),
-        yaxis=dict(
-            title='Puissance (GW)',
-            gridcolor='#e5e5e5',
-            showline=False,
-            tickfont=dict(size=12, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif'),
-            titlefont=dict(size=13, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
-        ),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=-0.3,
-            xanchor='center',
-            x=0.5,
-            bgcolor='rgba(255,255,255,0)',
-            bordercolor='rgba(0,0,0,0)',
-            font=dict(size=11, color='#6e6e73', family='SF Pro Display, -apple-system, sans-serif')
-        ),
-        height=400,
-        hovermode='x unified',
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        margin=dict(t=10, r=20, b=120, l=50),
-        font=dict(family='SF Pro Display, -apple-system, sans-serif')
+    # Define color scale
+    color_scale = alt.Scale(
+        domain=list(COLORS.keys()),
+        range=list(COLORS.values())
+    )
+
+    # Create stacked bar chart
+    bars = alt.Chart(df_long).mark_bar().encode(
+        x=alt.X('quarter:N',
+                title=None,
+                axis=alt.Axis(labelAngle=-45, labelColor='#6e6e73')),
+        y=alt.Y('Puissance:Q',
+                title='Puissance (GW)',
+                axis=alt.Axis(gridColor='#e5e5e5', labelColor='#6e6e73', titleColor='#6e6e73')),
+        color=alt.Color('Catégorie:N',
+                       scale=color_scale,
+                       legend=alt.Legend(orient='bottom', titleColor='#6e6e73', labelColor='#6e6e73')),
+        tooltip=[
+            alt.Tooltip('quarter:N', title='Trimestre'),
+            alt.Tooltip('Catégorie:N', title='Catégorie'),
+            alt.Tooltip('Puissance:Q', title='Puissance (GW)', format='.2f')
+        ]
+    )
+
+    # Add text labels on top showing totals
+    text = alt.Chart(df_totals).mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5,
+        fontSize=11,
+        color='#1d1d1f',
+        fontWeight=600
+    ).encode(
+        x=alt.X('quarter:N'),
+        y=alt.Y('total:Q'),
+        text=alt.Text('total:Q', format='.1f')
+    )
+
+    # Combine chart
+    chart = (bars + text).properties(
+        height=400
+    ).configure_view(
+        strokeWidth=0
+    ).configure_axis(
+        grid=True,
+        gridOpacity=0.3
     )
 
     # Calculate total for last quarter
-    total = totals[-1] if len(totals) > 0 else 0
+    total = totals.iloc[-1] if len(totals) > 0 else 0
 
-    return fig, total
+    return chart, total
 
 
 # ============================================================================
@@ -360,8 +363,8 @@ st.markdown("## Photovoltaïque")
 
 df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
 if not df_pv.empty:
-    fig_pv, total_pv = plot_stacked_bar(df_pv)
-    st.plotly_chart(fig_pv, use_container_width=True)
+    chart_pv, total_pv = plot_stacked_bar(df_pv)
+    st.altair_chart(chart_pv, use_container_width=True)
     st.info(f"**Dernier trimestre :** {total_pv:.2f} GW en file d'attente")
 else:
     st.warning("Aucune donnée photovoltaïque disponible")
@@ -371,8 +374,8 @@ st.markdown("## Éolien")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
-    fig_wind, total_wind = plot_stacked_bar(df_wind)
-    st.plotly_chart(fig_wind, use_container_width=True)
+    chart_wind, total_wind = plot_stacked_bar(df_wind)
+    st.altair_chart(chart_wind, use_container_width=True)
     st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
 else:
     st.warning("Aucune donnée éolienne disponible")
