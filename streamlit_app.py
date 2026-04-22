@@ -13,7 +13,7 @@ import altair as alt
 
 # Page configuration
 st.set_page_config(
-    page_title="Enedis Grid Analysis",
+    page_title="Plateforme d'analyse",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -323,7 +323,7 @@ def plot_stacked_bar(df, show_legend=True):
 data = load_data()
 
 # Header
-st.title("Analyse de la File d'Attente Enedis")
+st.title("Plateforme d'analyse")
 st.markdown("Projets d'énergies renouvelables en attente de raccordement")
 
 # Data freshness indicator
