@@ -224,7 +224,7 @@ def create_dataframe_from_data(data_dict):
     return df
 
 
-def plot_stacked_bar(df):
+def plot_stacked_bar(df, show_legend=True):
     """Create interactive stacked bar chart with Altair."""
     if df.empty:
         return None, 0
@@ -264,7 +264,7 @@ def plot_stacked_bar(df):
                 axis=alt.Axis(gridColor='#e5e5e5', labelColor='#6e6e73', titleColor='#6e6e73')),
         color=alt.Color('Catégorie:N',
                        scale=color_scale,
-                       legend=alt.Legend(orient='bottom', titleColor='#6e6e73', labelColor='#6e6e73')),
+                       legend=alt.Legend(orient='bottom', titleColor='#6e6e73', labelColor='#6e6e73') if show_legend else None),
         tooltip=[
             alt.Tooltip('quarter:N', title='Trimestre'),
             alt.Tooltip('Catégorie:N', title='Catégorie'),
@@ -374,7 +374,7 @@ st.markdown("## Éolien")
 
 df_wind = create_dataframe_from_data(data['data']['wind'])
 if not df_wind.empty:
-    chart_wind, total_wind = plot_stacked_bar(df_wind)
+    chart_wind, total_wind = plot_stacked_bar(df_wind, show_legend=False)
     st.altair_chart(chart_wind, use_container_width=True)
     st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
 else:
