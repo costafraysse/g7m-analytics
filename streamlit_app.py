@@ -164,7 +164,7 @@ if not check_password():
 # DATA LOADING
 # ============================================================================
 
-@st.cache_data(ttl=86400)  # Cache for 24 hours
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_data():
     """Load data from GitHub Gist or local file."""
     try:
