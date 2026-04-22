@@ -29,26 +29,39 @@ st.markdown("""
 
     /* Headers */
     h1 {
+        font-size: 2rem !important;
         font-weight: 600 !important;
         letter-spacing: -0.5px !important;
         color: #1d1d1f !important;
         margin-bottom: 0.25rem !important;
         margin-top: 0 !important;
         padding-top: 0 !important;
+        line-height: 1.2 !important;
     }
 
     h2 {
+        font-size: 1.5rem !important;
         font-weight: 600 !important;
         color: #1d1d1f !important;
         margin-top: 1.5rem !important;
         margin-bottom: 0.5rem !important;
+        line-height: 1.3 !important;
     }
 
     h3 {
+        font-size: 1.1rem !important;
         font-weight: 500 !important;
         color: #6e6e73 !important;
         margin-top: 0.25rem !important;
-        margin-bottom: 0.5rem !important;
+        margin-bottom: 0.75rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Subtitle paragraph */
+    .main p {
+        font-size: 0.95rem !important;
+        color: #6e6e73 !important;
+        margin-bottom: 1.5rem !important;
     }
 
     /* Metrics */
