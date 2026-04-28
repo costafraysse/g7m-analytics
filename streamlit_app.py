@@ -203,7 +203,13 @@ def load_rte_data():
             with open(file_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         else:
-            response = requests.get(gist_url_rte, timeout=10)
+            # Add cache-busting headers to bypass GitHub CDN cache
+            headers = {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+            response = requests.get(gist_url_rte, headers=headers, timeout=10)
             response.raise_for_status()
             return response.json()
     except Exception as e:
