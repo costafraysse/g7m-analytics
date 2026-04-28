@@ -810,7 +810,7 @@ if rte_data and rte_data.get('snapshots'):
         st.markdown("""
         **Légende:**
         - 🟢 Vert: > 25 MW
-        - 🟡 Jaune clair: 10-25 MW
+        - 🟩 Vert clair: 10-25 MW
         - 🟡 Jaune: 5-10 MW
         - 🟠 Orange: < 5 MW
         - ⚫ Gris: Aucune capacité
