@@ -908,4 +908,4 @@ else:
 
 # Footer
 st.markdown("")
-st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement **chaque lundi à 6h30 UTC**")
+st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement **chaque jour à 6h30 UTC**")
