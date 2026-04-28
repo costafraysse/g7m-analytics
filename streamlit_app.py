@@ -132,11 +132,13 @@ def check_password():
 
     def password_entered():
         """Check password and update session state."""
-        if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
-        else:
-            st.session_state["password_correct"] = False
+        # Check if password key exists in session state
+        if "password" in st.session_state and st.session_state["password"]:
+            if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
+                st.session_state["password_correct"] = True
+                del st.session_state["password"]  # Don't store password
+            else:
+                st.session_state["password_correct"] = False
 
     # Return True if password is correct
     if st.session_state.get("password_correct", False):
