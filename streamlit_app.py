@@ -376,11 +376,11 @@ def create_rte_map(snapshot_data, center_lat=46.603354, center_lon=1.888334, zoo
         elif '5-10' in str(capacity_str):
             return 'yellow'
         elif '10-25' in str(capacity_str):
-            return 'lightgreen'
+            return 'blue'
         elif '> 25' in str(capacity_str) or '>= 25' in str(capacity_str):
             return 'green'
         else:
-            return 'blue'
+            return 'gray'
 
     # Add markers for each substation
     for feature in snapshot_data['substations']:
@@ -563,7 +563,7 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
 
             popup_html = f"""
             <div style="font-family: sans-serif; min-width: 250px;">
-                <h4 style="margin-bottom: 5px; color: #0071e3;">MODIFIÉ</h4>
+                <h4 style="margin-bottom: 5px; color: purple;">MODIFIÉ</h4>
                 <p style="margin: 2px 0;"><strong>Poste:</strong> {change.get('ADRPoste', 'N/A')}</p>
                 <p style="margin: 2px 0;"><strong>Commune:</strong> {change.get('NomCommune', 'N/A')}</p>
                 <hr style="margin: 5px 0;">
@@ -576,9 +576,9 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
             folium.CircleMarker(
                 location=[lat, lon],
                 radius=8,
-                color='blue',
+                color='purple',
                 fill=True,
-                fillColor='blue',
+                fillColor='purple',
                 fillOpacity=0.8,
                 popup=folium.Popup(popup_html, max_width=350),
                 tooltip=f"Modifié: {change.get('NomCommune', 'N/A')}"
@@ -592,7 +592,7 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
 
             popup_html = f"""
             <div style="font-family: sans-serif; min-width: 200px;">
-                <h4 style="margin-bottom: 5px; color: green;">NOUVEAU</h4>
+                <h4 style="margin-bottom: 5px; color: #8B4513;">NOUVEAU</h4>
                 <p style="margin: 2px 0;"><strong>Poste:</strong> {sub.get('ADRPoste', 'N/A')}</p>
                 <p style="margin: 2px 0;"><strong>Commune:</strong> {sub.get('NomCommune', 'N/A')}</p>
                 <p style="margin: 2px 0;"><strong>Capacité:</strong> {sub.get('CapaciteSansContrainte', 'N/A')}</p>
@@ -602,9 +602,9 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
             folium.CircleMarker(
                 location=[lat, lon],
                 radius=8,
-                color='green',
+                color='#8B4513',
                 fill=True,
-                fillColor='green',
+                fillColor='#8B4513',
                 fillOpacity=0.8,
                 popup=folium.Popup(popup_html, max_width=300),
                 tooltip=f"Nouveau: {sub.get('NomCommune', 'N/A')}"
@@ -809,11 +809,11 @@ if rte_data and rte_data.get('snapshots'):
         # Legend
         st.markdown("""
         **Légende:**
-        - 🟢 Vert: > 25 MW
-        - 🟩 Vert clair: 10-25 MW
-        - 🟡 Jaune: 5-10 MW
-        - 🟠 Orange: < 5 MW
-        - ⚫ Gris: Aucune capacité
+        - 🟢 Vert : > 25 MW
+        - 🔵 Bleu : 10-25 MW
+        - 🟡 Jaune : 5-10 MW
+        - 🟠 Orange : < 5 MW
+        - ⚫ Gris : Aucune capacité
         """)
 
     with col_map2:
@@ -874,9 +874,9 @@ if rte_data and rte_data.get('snapshots'):
         # Legend for changes
         st.markdown("""
         **Légende:**
-        - 🔵 Bleu: Modifié
-        - 🟢 Vert: Nouveau
-        - 🔴 Rouge: Supprimé
+        - 🟣 Violet : Modifié
+        - 🔴 Rouge : Supprimé
+        - 🟤 Marron : Nouveau
         """)
 
     # Changes table
