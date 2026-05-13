@@ -272,22 +272,26 @@ def load_rte_data():
 
         # Convert v2.0 format to v1.0 format for backward compatibility
         if data.get('version') == '2.0':
-            # Reconstruct all snapshots from base + deltas
-            base_snapshot = data.get('base_snapshot')
-            compressed_snapshots = data.get('snapshots', [])
+            try:
+                # Reconstruct all snapshots from base + deltas
+                base_snapshot = data.get('base_snapshot')
+                compressed_snapshots = data.get('snapshots', [])
 
-            reconstructed_snapshots = []
-            for i in range(len(compressed_snapshots)):
-                reconstructed = reconstruct_snapshot_from_deltas(base_snapshot, compressed_snapshots, i)
-                reconstructed_snapshots.append(reconstructed)
+                reconstructed_snapshots = []
+                for i in range(len(compressed_snapshots)):
+                    reconstructed = reconstruct_snapshot_from_deltas(base_snapshot, compressed_snapshots, i)
+                    reconstructed_snapshots.append(reconstructed)
 
-            # Return in v1.0-compatible format
-            return {
-                'generated_at': data['generated_at'],
-                'metadata': data['metadata'],
-                'snapshots': reconstructed_snapshots,
-                'change_log': []  # v2.0 doesn't have change_log in same format
-            }
+                # Return in v1.0-compatible format
+                return {
+                    'generated_at': data['generated_at'],
+                    'metadata': data['metadata'],
+                    'snapshots': reconstructed_snapshots,
+                    'change_log': []  # v2.0 doesn't have change_log in same format
+                }
+            except Exception as e:
+                st.warning(f"⚠️ Could not reconstruct v2.0 format: {str(e)}")
+                return None
 
         # Return v1.0 format as-is
         return data
