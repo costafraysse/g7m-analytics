@@ -189,9 +189,70 @@ def load_data():
         st.stop()
 
 
+def reconstruct_snapshot_from_deltas(base_snapshot, snapshots, target_index):
+    """
+    Reconstruct full snapshot state from base + deltas up to target index.
+
+    Args:
+        base_snapshot: Base snapshot data with 'substations' and 'gabarit_zones'
+        snapshots: List of all snapshots (bases and deltas)
+        target_index: Index of target snapshot to reconstruct to
+
+    Returns:
+        Reconstructed snapshot dict with 'substations' and 'gabarit_zones'
+    """
+    if not base_snapshot:
+        return {'substations': [], 'gabarit_zones': []}
+
+    # Start with base
+    current_state = {
+        'substations': {
+            sub['properties']['IDRPoste']: sub
+            for sub in base_snapshot.get('substations', [])
+        },
+        'gabarit_zones': base_snapshot.get('gabarit_zones', [])
+    }
+
+    # Apply snapshots up to target index
+    for i, snapshot in enumerate(snapshots):
+        if i > target_index:
+            break
+
+        if snapshot.get('type') == 'base':
+            # Reset to new base
+            current_state = {
+                'substations': {
+                    sub['properties']['IDRPoste']: sub
+                    for sub in snapshot['data'].get('substations', [])
+                },
+                'gabarit_zones': snapshot['data'].get('gabarit_zones', [])
+            }
+        elif snapshot.get('type') == 'delta':
+            # Apply delta changes
+            delta = snapshot.get('data', {})
+
+            # Add new substations
+            for sub in delta.get('added', []):
+                current_state['substations'][sub['properties']['IDRPoste']] = sub
+
+            # Remove substations
+            for sub_id in delta.get('removed', []):
+                current_state['substations'].pop(sub_id, None)
+
+            # Update modified substations
+            for sub_id, sub in delta.get('modified', {}).items():
+                current_state['substations'][sub_id] = sub
+
+    return {
+        'date': snapshots[target_index].get('date'),
+        'substations': list(current_state['substations'].values()),
+        'gabarit_zones': current_state['gabarit_zones']
+    }
+
+
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_rte_data():
-    """Load RTE CartoStock data from GitHub Gist or local file."""
+    """Load RTE CartoStock data from GitHub Gist or local file (supports v1.0 and v2.0 formats)."""
     try:
         gist_url_rte = st.secrets.get("gist_url_rte")
 
@@ -203,11 +264,34 @@ def load_rte_data():
             import json
             file_path = gist_url_rte.replace("file://", "")
             with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
         else:
             response = requests.get(gist_url_rte, timeout=10)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+
+        # Convert v2.0 format to v1.0 format for backward compatibility
+        if data.get('version') == '2.0':
+            # Reconstruct all snapshots from base + deltas
+            base_snapshot = data.get('base_snapshot')
+            compressed_snapshots = data.get('snapshots', [])
+
+            reconstructed_snapshots = []
+            for i in range(len(compressed_snapshots)):
+                reconstructed = reconstruct_snapshot_from_deltas(base_snapshot, compressed_snapshots, i)
+                reconstructed_snapshots.append(reconstructed)
+
+            # Return in v1.0-compatible format
+            return {
+                'generated_at': data['generated_at'],
+                'metadata': data['metadata'],
+                'snapshots': reconstructed_snapshots,
+                'change_log': []  # v2.0 doesn't have change_log in same format
+            }
+
+        # Return v1.0 format as-is
+        return data
+
     except Exception as e:
         st.warning(f"⚠️ Could not load RTE data: {str(e)}")
         return None
