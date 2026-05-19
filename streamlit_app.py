@@ -1575,7 +1575,7 @@ with tab3:
                 if display_snapshot and display_snapshot.get('substations'):
                     with st.spinner('Chargement de la carte...'):
                         state_map = create_capareseau_map(display_snapshot)
-                        st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}")
+                        st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}", returned_objects=[])
 
                     # Legend
                     st.markdown("""
@@ -1676,7 +1676,7 @@ with tab3:
                                     display_snap2,
                                     display_snap1
                                 )
-                                st_folium(changes_map, width=550, height=500, key=f"capareseau_changes_map_{date1_idx}_{date2_idx}")
+                                st_folium(changes_map, width=550, height=500, key=f"capareseau_changes_map_{date1_idx}_{date2_idx}", returned_objects=[])
 
                             # Legend
                             st.markdown("""
