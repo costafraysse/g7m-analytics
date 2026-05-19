@@ -820,6 +820,351 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
 
 
 # ============================================================================
+# CAPARESEAU MAP FUNCTIONS
+# ============================================================================
+
+def get_capareseau_capacity_color(capacity_value):
+    """
+    Get marker color based on Capareseau reserved capacity (INFO_CR).
+
+    Args:
+        capacity_value: Capacity value (string or number)
+
+    Returns:
+        Color string for Folium marker
+    """
+    if not capacity_value or capacity_value == 'null' or capacity_value == 'N/A':
+        return 'gray'
+
+    capacity_str = str(capacity_value).upper()
+
+    # Color scheme matching RTE for consistency
+    if '< 5' in capacity_str or capacity_str.startswith('0'):
+        return 'orange'
+    elif '5' in capacity_str and '10' in capacity_str:
+        return 'yellow'
+    elif '10' in capacity_str and '25' in capacity_str:
+        return 'blue'
+    elif '> 25' in capacity_str or '>= 25' in capacity_str:
+        return 'green'
+    else:
+        return 'gray'
+
+
+def create_capareseau_map(snapshot_data, center_lat=46.603354, center_lon=1.888334, zoom_start=6):
+    """
+    Create a Folium map showing Capareseau substations for a given snapshot.
+
+    Args:
+        snapshot_data: Snapshot dict with 'substations' list
+        center_lat: Map center latitude
+        center_lon: Map center longitude
+        zoom_start: Initial zoom level
+
+    Returns:
+        Folium map object
+    """
+    # Create base map
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=zoom_start,
+        tiles='OpenStreetMap'
+    )
+
+    if not snapshot_data or 'substations' not in snapshot_data:
+        return m
+
+    # Add markers for each substation
+    for sub in snapshot_data['substations']:
+        # Extract coordinates from flat X, Y fields
+        lat = sub.get('Y')
+        lon = sub.get('X')
+
+        if not lat or not lon:
+            continue
+
+        # Get substation details
+        name = sub.get('name', 'N/A')
+        code = sub.get('code', 'N/A')
+        territory = sub.get('territory_name', 'N/A')
+        htb_type = sub.get('htb_type', 'N/A')
+
+        values = sub.get('values', {})
+        capacity_reserved = values.get('INFO_CR', 'N/A')
+        rate = values.get('INFO_TX', 'N/A')
+        availability = values.get('INFO_NA', 'N/A')
+        ess3r = values.get('INFO_ESS3R', 'N/A')
+        fas3r = values.get('INFO_FAS3R', 'N/A')
+        grd1_cdr = values.get('GRD1_CDR', 'N/A')
+        rte_cdr = values.get('RTE_CDR', 'N/A')
+        transformer = values.get('INFO_TRF', 'N/A')
+
+        color = get_capareseau_capacity_color(capacity_reserved)
+
+        # Create popup content
+        popup_html = f"""
+        <div style="font-family: sans-serif; min-width: 250px;">
+            <h4 style="margin-bottom: 5px; color: #1d1d1f;">{name}</h4>
+            <p style="margin: 2px 0; font-size: 0.9em; color: #6e6e73;"><strong>Code:</strong> {code}</p>
+            <p style="margin: 2px 0; font-size: 0.9em; color: #6e6e73;"><strong>Région:</strong> {territory}</p>
+            <p style="margin: 2px 0; font-size: 0.9em; color: #6e6e73;"><strong>Type HTB:</strong> {htb_type}</p>
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #d2d2d7;">
+            <p style="margin: 2px 0;"><strong>Capacité Réservée (CR):</strong> {capacity_reserved}</p>
+            <p style="margin: 2px 0;"><strong>Taux (TX):</strong> {rate}</p>
+            <p style="margin: 2px 0;"><strong>Disponibilité (NA):</strong> {availability}</p>
+            <hr style="margin: 8px 0; border: none; border-top: 1px solid #d2d2d7;">
+            <p style="margin: 2px 0; font-size: 0.85em; color: #6e6e73;"><strong>Stockage 3R:</strong> {ess3r}</p>
+            <p style="margin: 2px 0; font-size: 0.85em; color: #6e6e73;"><strong>Flexible AC 3R:</strong> {fas3r}</p>
+            <p style="margin: 2px 0; font-size: 0.85em; color: #6e6e73;"><strong>GRD1 CDR:</strong> {grd1_cdr}</p>
+            <p style="margin: 2px 0; font-size: 0.85em; color: #6e6e73;"><strong>RTE CDR:</strong> {rte_cdr}</p>
+            <p style="margin: 2px 0; font-size: 0.85em; color: #6e6e73;"><strong>Transformateur:</strong> {transformer}</p>
+        </div>
+        """
+
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=5,
+            color=color,
+            fill=True,
+            fillColor=color,
+            fillOpacity=0.7,
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=name
+        ).add_to(m)
+
+    return m
+
+
+def compare_two_capareseau_snapshots(snapshot1, snapshot2):
+    """
+    Compare two arbitrary Capareseau snapshots and return changes.
+
+    Args:
+        snapshot1: Earlier snapshot dict with 'substations' list
+        snapshot2: Later snapshot dict with 'substations' list
+
+    Returns:
+        Changes dict with added, removed, and modified substations
+    """
+    if not snapshot1 or not snapshot2:
+        return None
+
+    # Index substations by code
+    subs1 = {
+        sub['code']: sub
+        for sub in snapshot1.get('substations', [])
+    }
+    subs2 = {
+        sub['code']: sub
+        for sub in snapshot2.get('substations', [])
+    }
+
+    # Find added and removed
+    ids1 = set(subs1.keys())
+    ids2 = set(subs2.keys())
+
+    added_ids = ids2 - ids1
+    removed_ids = ids1 - ids2
+    common_ids = ids1 & ids2
+
+    # Find modified
+    modified = []
+    for sub_id in common_ids:
+        sub1 = subs1[sub_id]
+        sub2 = subs2[sub_id]
+
+        # Check if capacity values changed
+        vals1 = sub1.get('values', {})
+        vals2 = sub2.get('values', {})
+
+        # Track which fields changed
+        changed_fields = {}
+        for field in ['INFO_CR', 'INFO_TX', 'INFO_NA', 'INFO_ESS3R', 'INFO_FAS3R',
+                     'GRD1_CDR', 'RTE_CDR', 'INFO_TRF']:
+            val1 = vals1.get(field) if isinstance(vals1, dict) else None
+            val2 = vals2.get(field) if isinstance(vals2, dict) else None
+            if val1 != val2:
+                changed_fields[field] = {
+                    'old': val1,
+                    'new': val2
+                }
+
+        if changed_fields:
+            modified.append({
+                'code': sub_id,
+                'name': sub2.get('name'),
+                'territory_name': sub2.get('territory_name'),
+                'X': sub2.get('X'),
+                'Y': sub2.get('Y'),
+                'changes': changed_fields
+            })
+
+    return {
+        'date': snapshot2.get('date'),
+        'added': len(added_ids),
+        'removed': len(removed_ids),
+        'modified': modified,
+        'added_substations': [subs2[sid] for sid in added_ids],
+        'removed_substations': [subs1[sid] for sid in removed_ids],
+        'summary': f"{len(added_ids)} added, {len(removed_ids)} removed, {len(modified)} modified"
+    }
+
+
+def create_capareseau_changes_map(changes_data, snapshot_data, previous_snapshot_data=None, center_lat=46.603354, center_lon=1.888334, zoom_start=6):
+    """
+    Create a Folium map showing only Capareseau substations that changed.
+
+    Args:
+        changes_data: Changes dict with 'modified', 'added_substations', 'removed_substations'
+        snapshot_data: Current snapshot for coordinate lookup
+        previous_snapshot_data: Previous snapshot for removed substations coordinates
+        center_lat: Map center latitude
+        center_lon: Map center longitude
+        zoom_start: Initial zoom level
+
+    Returns:
+        Folium map object
+    """
+    # Create base map
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=zoom_start,
+        tiles='OpenStreetMap'
+    )
+
+    if not changes_data:
+        return m
+
+    # Index current substations by code for coordinate lookup
+    substation_coords = {}
+    if snapshot_data and 'substations' in snapshot_data:
+        for sub in snapshot_data['substations']:
+            sub_id = sub.get('code')
+            lat = sub.get('Y')
+            lon = sub.get('X')
+            if sub_id and lat and lon:
+                substation_coords[sub_id] = (lat, lon)
+
+    # Also index previous snapshot for removed substations
+    if previous_snapshot_data and 'substations' in previous_snapshot_data:
+        for sub in previous_snapshot_data['substations']:
+            sub_id = sub.get('code')
+            lat = sub.get('Y')
+            lon = sub.get('X')
+            if sub_id and lat and lon and sub_id not in substation_coords:
+                substation_coords[sub_id] = (lat, lon)
+
+    # Add modified substations (purple)
+    for change in changes_data.get('modified', []):
+        sub_id = change.get('code')
+        lat = change.get('Y')
+        lon = change.get('X')
+
+        if not lat or not lon:
+            if sub_id in substation_coords:
+                lat, lon = substation_coords[sub_id]
+            else:
+                continue
+
+        # Build change details
+        changes_list = []
+        for field, vals in change.get('changes', {}).items():
+            old_val = vals.get('old', 'N/A')
+            new_val = vals.get('new', 'N/A')
+            changes_list.append(f"<li><strong>{field}:</strong> {old_val} → {new_val}</li>")
+
+        changes_html = ''.join(changes_list)
+
+        popup_html = f"""
+        <div style="font-family: sans-serif; min-width: 280px;">
+            <h4 style="margin-bottom: 5px; color: purple;">MODIFIÉ</h4>
+            <p style="margin: 2px 0;"><strong>Poste:</strong> {change.get('name', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Code:</strong> {change.get('code', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Région:</strong> {change.get('territory_name', 'N/A')}</p>
+            <hr style="margin: 5px 0;">
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                {changes_html}
+            </ul>
+        </div>
+        """
+
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=8,
+            color='purple',
+            fill=True,
+            fillColor='purple',
+            fillOpacity=0.8,
+            popup=folium.Popup(popup_html, max_width=350),
+            tooltip=f"Modifié: {change.get('name', 'N/A')}"
+        ).add_to(m)
+
+    # Add added substations (brown)
+    for sub in changes_data.get('added_substations', []):
+        lat = sub.get('Y')
+        lon = sub.get('X')
+
+        if not lat or not lon:
+            continue
+
+        values = sub.get('values', {})
+        capacity = values.get('INFO_CR', 'N/A') if isinstance(values, dict) else 'N/A'
+
+        popup_html = f"""
+        <div style="font-family: sans-serif; min-width: 250px;">
+            <h4 style="margin-bottom: 5px; color: #8B4513;">NOUVEAU</h4>
+            <p style="margin: 2px 0;"><strong>Poste:</strong> {sub.get('name', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Code:</strong> {sub.get('code', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Région:</strong> {sub.get('territory_name', 'N/A')}</p>
+            <p style="margin: 2px 0;"><strong>Capacité:</strong> {capacity}</p>
+        </div>
+        """
+
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=8,
+            color='#8B4513',
+            fill=True,
+            fillColor='#8B4513',
+            fillOpacity=0.8,
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"Nouveau: {sub.get('name', 'N/A')}"
+        ).add_to(m)
+
+    # Add removed substations (red)
+    for sub in changes_data.get('removed_substations', []):
+        sub_id = sub.get('code')
+        if sub_id in substation_coords:
+            lat, lon = substation_coords[sub_id]
+
+            values = sub.get('values', {})
+            capacity = values.get('INFO_CR', 'N/A') if isinstance(values, dict) else 'N/A'
+
+            popup_html = f"""
+            <div style="font-family: sans-serif; min-width: 250px;">
+                <h4 style="margin-bottom: 5px; color: red;">SUPPRIMÉ</h4>
+                <p style="margin: 2px 0;"><strong>Poste:</strong> {sub.get('name', 'N/A')}</p>
+                <p style="margin: 2px 0;"><strong>Code:</strong> {sub.get('code', 'N/A')}</p>
+                <p style="margin: 2px 0;"><strong>Région:</strong> {sub.get('territory_name', 'N/A')}</p>
+                <p style="margin: 2px 0;"><strong>Capacité:</strong> {capacity}</p>
+            </div>
+            """
+
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=8,
+                color='red',
+                fill=True,
+                fillColor='red',
+                fillOpacity=0.8,
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=f"Supprimé: {sub.get('name', 'N/A')}"
+            ).add_to(m)
+
+    return m
+
+
+# ============================================================================
 # MAIN APP
 # ============================================================================
 
@@ -1145,31 +1490,228 @@ with tab3:
                 latest_change = capareseau_data['change_log'][-1]
                 st.caption(f"Dernier: {latest_change['summary']}")
 
+        # Map Visualization
         st.markdown("")
-        st.info("📍 Visualisation cartographique en cours de développement. Les données sont collectées et historisées quotidiennement.")
+        st.markdown("### 📍 Visualisation Cartographique")
 
-        # Show latest snapshot summary
-        if capareseau_data.get('latest_snapshot'):
-            latest = capareseau_data['latest_snapshot']
-            st.markdown("### Dernières Données")
+        if capareseau_data and capareseau_data.get('snapshots'):
+            snapshots = capareseau_data['snapshots']
 
-            # Show sample of substations
-            if latest.get('substations') and len(latest['substations']) > 0:
-                st.markdown(f"**{len(latest['substations'])} postes sources** collectés")
+            # Parse snapshot dates
+            snapshot_dates = []
+            for s in snapshots:
+                try:
+                    date_str = s.get('date', '')
+                    if date_str:
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        snapshot_dates.append(dt)
+                    else:
+                        snapshot_dates.append(None)
+                except:
+                    snapshot_dates.append(None)
 
-                # Create a sample dataframe
-                sample_subs = latest['substations'][:10]
-                df_sample = pd.DataFrame([{
-                    'Nom': s.get('name', 'N/A'),
-                    'Code': s.get('code', 'N/A'),
-                    'Région': s.get('territory_name', 'N/A'),
-                    'Type HTB': s.get('htb_type', 'N/A'),
-                    'Capacité Réservée (CR)': s.get('values', {}).get('INFO_CR', 'N/A'),
-                    'Taux': s.get('values', {}).get('INFO_TX', 'N/A')
-                } for s in sample_subs])
+            date_labels = [d.strftime('%d/%m/%Y %H:%M') if d else 'N/A' for d in snapshot_dates]
 
-                st.dataframe(df_sample, use_container_width=True, hide_index=True)
-                st.caption(f"Aperçu des 10 premiers postes (sur {len(latest['substations'])} total)")
+            # Two columns for maps
+            col_map1, col_map2 = st.columns(2)
+
+            with col_map1:
+                st.markdown("#### État des Postes")
+                st.caption("Vue d'ensemble de tous les postes et leur capacité disponible")
+
+                # Date selector for state map
+                if len(snapshots) > 1:
+                    state_date_idx = st.selectbox(
+                        "📅 Date pour l'état:",
+                        options=range(len(snapshots)),
+                        format_func=lambda i: date_labels[i],
+                        index=len(snapshots) - 1,
+                        key="capareseau_state_date"
+                    )
+                else:
+                    state_date_idx = 0
+                    if len(snapshots) == 1 and snapshot_dates[0]:
+                        st.info(f"📅 Snapshot unique du {date_labels[0]} UTC")
+
+                # Get selected snapshot
+                selected_snapshot = snapshots[state_date_idx]
+
+                # Reconstruct if delta format
+                if selected_snapshot.get('type') == 'delta':
+                    # Need to reconstruct from base + all deltas up to this point
+                    base_snapshot = capareseau_data.get('base_snapshot', {})
+                    reconstructed = {'substations': list(base_snapshot.get('substations', []))}
+
+                    # Apply deltas in order
+                    for snap in snapshots[:state_date_idx + 1]:
+                        if snap.get('type') == 'base':
+                            reconstructed = {'substations': snap.get('data', {}).get('substations', [])}
+                        elif snap.get('type') == 'delta':
+                            delta = snap.get('data', {})
+                            subs_dict = {sub['code']: sub for sub in reconstructed.get('substations', [])}
+
+                            # Apply delta
+                            for sub in delta.get('added', []):
+                                subs_dict[sub['code']] = sub
+                            for sub_id in delta.get('removed', []):
+                                subs_dict.pop(sub_id, None)
+                            for sub_id, sub in delta.get('modified', {}).items():
+                                subs_dict[sub_id] = sub
+
+                            reconstructed = {'substations': list(subs_dict.values())}
+
+                    display_snapshot = reconstructed
+                elif selected_snapshot.get('type') == 'base':
+                    display_snapshot = selected_snapshot.get('data', {})
+                else:
+                    # Old format
+                    display_snapshot = selected_snapshot
+
+                # Create and display state map
+                if display_snapshot and display_snapshot.get('substations'):
+                    with st.spinner('Chargement de la carte...'):
+                        state_map = create_capareseau_map(display_snapshot)
+                        st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}")
+
+                    # Legend
+                    st.markdown("""
+                    **Légende:**
+                    - 🟢 Vert : > 25 MW
+                    - 🔵 Bleu : 10-25 MW
+                    - 🟡 Jaune : 5-10 MW
+                    - 🟠 Orange : < 5 MW
+                    - ⚫ Gris : Aucune capacité / Données indisponibles
+                    """)
+
+                    st.caption(f"**{len(display_snapshot['substations'])} postes sources** affichés")
+
+            with col_map2:
+                st.markdown("#### Changements")
+                st.caption("Comparer deux dates pour voir les changements")
+
+                # Date comparison selectors
+                if len(snapshots) > 1:
+                    col_date1, col_date2 = st.columns(2)
+
+                    with col_date1:
+                        date1_idx = st.selectbox(
+                            "📅 Date 1 (avant):",
+                            options=range(len(snapshots)),
+                            format_func=lambda i: date_labels[i],
+                            index=max(0, len(snapshots) - 2),
+                            key="capareseau_compare_date1"
+                        )
+
+                    with col_date2:
+                        date2_idx = st.selectbox(
+                            "📅 Date 2 (après):",
+                            options=range(len(snapshots)),
+                            format_func=lambda i: date_labels[i],
+                            index=len(snapshots) - 1,
+                            key="capareseau_compare_date2"
+                        )
+
+                    if date1_idx == date2_idx:
+                        st.warning("⚠️ Veuillez sélectionner deux dates différentes pour la comparaison")
+                    else:
+                        # Reconstruct both snapshots
+                        snap1 = snapshots[date1_idx]
+                        snap2 = snapshots[date2_idx]
+
+                        # Reconstruct snapshot 1
+                        if snap1.get('type') in ['delta', 'base']:
+                            base_snapshot = capareseau_data.get('base_snapshot', {})
+                            reconstructed1 = {'substations': list(base_snapshot.get('substations', []))}
+
+                            for snap in snapshots[:date1_idx + 1]:
+                                if snap.get('type') == 'base':
+                                    reconstructed1 = {'substations': snap.get('data', {}).get('substations', [])}
+                                elif snap.get('type') == 'delta':
+                                    delta = snap.get('data', {})
+                                    subs_dict = {sub['code']: sub for sub in reconstructed1.get('substations', [])}
+                                    for sub in delta.get('added', []):
+                                        subs_dict[sub['code']] = sub
+                                    for sub_id in delta.get('removed', []):
+                                        subs_dict.pop(sub_id, None)
+                                    for sub_id, sub in delta.get('modified', {}).items():
+                                        subs_dict[sub_id] = sub
+                                    reconstructed1 = {'substations': list(subs_dict.values())}
+                            display_snap1 = reconstructed1
+                        else:
+                            display_snap1 = snap1
+
+                        # Reconstruct snapshot 2
+                        if snap2.get('type') in ['delta', 'base']:
+                            base_snapshot = capareseau_data.get('base_snapshot', {})
+                            reconstructed2 = {'substations': list(base_snapshot.get('substations', []))}
+
+                            for snap in snapshots[:date2_idx + 1]:
+                                if snap.get('type') == 'base':
+                                    reconstructed2 = {'substations': snap.get('data', {}).get('substations', [])}
+                                elif snap.get('type') == 'delta':
+                                    delta = snap.get('data', {})
+                                    subs_dict = {sub['code']: sub for sub in reconstructed2.get('substations', [])}
+                                    for sub in delta.get('added', []):
+                                        subs_dict[sub['code']] = sub
+                                    for sub_id in delta.get('removed', []):
+                                        subs_dict.pop(sub_id, None)
+                                    for sub_id, sub in delta.get('modified', {}).items():
+                                        subs_dict[sub_id] = sub
+                                    reconstructed2 = {'substations': list(subs_dict.values())}
+                            display_snap2 = reconstructed2
+                        else:
+                            display_snap2 = snap2
+
+                        # Compare snapshots
+                        changes = compare_two_capareseau_snapshots(display_snap1, display_snap2)
+
+                        if changes:
+                            with st.spinner('Chargement de la carte des changements...'):
+                                changes_map = create_capareseau_changes_map(
+                                    changes,
+                                    display_snap2,
+                                    display_snap1
+                                )
+                                st_folium(changes_map, width=550, height=500, key=f"capareseau_changes_map_{date1_idx}_{date2_idx}")
+
+                            # Legend
+                            st.markdown("""
+                            **Légende:**
+                            - 🟣 Violet : Modifié
+                            - 🔴 Rouge : Supprimé
+                            - 🟤 Marron : Nouveau
+                            """)
+
+                            st.caption(f"**{changes['summary']}**")
+
+                            # Show detailed changes table
+                            if changes.get('modified'):
+                                st.markdown("**Détails des modifications:**")
+                                changes_list = []
+                                for change in changes['modified']:
+                                    for field, vals in change.get('changes', {}).items():
+                                        if vals['old'] != vals['new']:
+                                            changes_list.append({
+                                                'Poste': change.get('name', 'N/A'),
+                                                'Région': change.get('territory_name', 'N/A'),
+                                                'Champ': field,
+                                                'Ancienne Valeur': vals['old'],
+                                                'Nouvelle Valeur': vals['new']
+                                            })
+
+                                if changes_list:
+                                    df_changes = pd.DataFrame(changes_list)
+                                    st.dataframe(df_changes, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Un seul snapshot disponible - attendez la prochaine collecte pour voir les changements")
+
+                    # Legend anyway
+                    st.markdown("""
+                    **Légende:**
+                    - 🟣 Violet : Modifié
+                    - 🔴 Rouge : Supprimé
+                    - 🟤 Marron : Nouveau
+                    """)
 
     else:
         st.info("Les données Capareseau ne sont pas encore disponibles. Elles seront ajoutées lors de la prochaine collecte automatique.")
