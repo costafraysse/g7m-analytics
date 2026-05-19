@@ -1501,6 +1501,9 @@ with tab3:
         if capareseau_data and capareseau_data.get('snapshots'):
             snapshots = capareseau_data['snapshots']
 
+            # Debug: Show snapshot count
+            st.info(f"🔍 Debug: {len(snapshots)} snapshots trouvés")
+
             # Parse snapshot dates
             snapshot_dates = []
             for s in snapshots:
@@ -1511,7 +1514,8 @@ with tab3:
                         snapshot_dates.append(dt)
                     else:
                         snapshot_dates.append(None)
-                except:
+                except Exception as e:
+                    st.warning(f"⚠️ Date parsing error: {e} for date: {s.get('date', 'N/A')}")
                     snapshot_dates.append(None)
 
             date_labels = [d.strftime('%d/%m/%Y %H:%M') if d else 'N/A' for d in snapshot_dates]
@@ -1573,9 +1577,17 @@ with tab3:
 
                 # Create and display state map
                 if display_snapshot and display_snapshot.get('substations'):
-                    with st.spinner('Chargement de la carte...'):
-                        state_map = create_capareseau_map(display_snapshot)
-                        st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}", returned_objects=[])
+                    st.info(f"🔍 Debug: Creating map with {len(display_snapshot.get('substations', []))} substations")
+                    try:
+                        with st.spinner('Chargement de la carte...'):
+                            state_map = create_capareseau_map(display_snapshot)
+                            st.info("🔍 Debug: Map created, rendering with st_folium...")
+                            st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}", returned_objects=[])
+                            st.success("✓ Map rendered successfully")
+                    except Exception as e:
+                        st.error(f"❌ Error creating/rendering map: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
 
                     # Legend
                     st.markdown("""
