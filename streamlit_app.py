@@ -315,14 +315,82 @@ def load_capareseau_data():
             import json
             file_path = gist_url_capareseau.replace("file://", "")
             with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
         else:
             response = requests.get(gist_url_capareseau, timeout=10)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+
+        # Handle v2.0 format with delta compression
+        if data.get('version') == '2.0':
+            # Reconstruct latest snapshot from base + deltas
+            data = reconstruct_capareseau_latest(data)
+
+        return data
     except Exception as e:
         st.warning(f"⚠️ Could not load Capareseau data: {str(e)}")
         return None
+
+
+def reconstruct_capareseau_latest(data):
+    """
+    Reconstruct the latest full snapshot from v2.0 delta-encoded data.
+
+    Args:
+        data: v2.0 format data with base_snapshot and snapshots
+
+    Returns:
+        Data in old format compatible with UI (with latest_snapshot having substations field)
+    """
+    base_snapshot = data.get('base_snapshot', {})
+    snapshots = data.get('snapshots', [])
+
+    if not base_snapshot or not snapshots:
+        return data
+
+    # Start with base snapshot substations
+    current_state = {sub['code']: sub for sub in base_snapshot.get('substations', [])}
+
+    # Apply each snapshot in order
+    for snapshot in snapshots:
+        snapshot_type = snapshot.get('type')
+
+        if snapshot_type == 'base':
+            # Reset to new base
+            current_state = {sub['code']: sub for sub in snapshot.get('data', {}).get('substations', [])}
+
+        elif snapshot_type == 'delta':
+            delta = snapshot.get('data', {})
+
+            # Add new substations
+            for sub in delta.get('added', []):
+                current_state[sub['code']] = sub
+
+            # Remove substations
+            for sub_id in delta.get('removed', []):
+                current_state.pop(sub_id, None)
+
+            # Update modified substations
+            for sub_id, sub in delta.get('modified', {}).items():
+                current_state[sub_id] = sub
+
+    # Create latest_snapshot in old format
+    substations = list(current_state.values())
+
+    return {
+        'version': data.get('version'),
+        'generated_at': data.get('generated_at'),
+        'metadata': data.get('metadata'),
+        'snapshots': snapshots,
+        'change_log': data.get('change_log', []),
+        'latest_snapshot': {
+            'date': snapshots[-1].get('date') if snapshots else None,
+            'substations': substations,
+            'metadata': {
+                'num_substations': len(substations)
+            }
+        }
+    }
 
 
 # ============================================================================
