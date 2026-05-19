@@ -301,6 +301,30 @@ def load_rte_data():
         return None
 
 
+@st.cache_data(ttl=3600)
+def load_capareseau_data():
+    """Load Capareseau data from GitHub Gist or local file."""
+    try:
+        gist_url_capareseau = st.secrets.get("gist_url_capareseau")
+
+        if not gist_url_capareseau:
+            return None
+
+        # Support local file loading for testing
+        if gist_url_capareseau.startswith("file://"):
+            import json
+            file_path = gist_url_capareseau.replace("file://", "")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            response = requests.get(gist_url_capareseau, timeout=10)
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        st.warning(f"⚠️ Could not load Capareseau data: {str(e)}")
+        return None
+
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -736,264 +760,352 @@ data = load_data()
 
 # Header
 st.title("Plateforme d'analyse")
-st.markdown("Projets d'énergies renouvelables en attente de raccordement")
+st.markdown("Projets d'énergies renouvelables et capacités d'accueil réseau")
 
-# Data freshness indicator
-st.markdown("")
-col1, col2, col3 = st.columns(3)
-
-source_last_update = datetime.fromisoformat(data['source_last_update'].replace('Z', '+00:00'))
-generated_at = datetime.fromisoformat(data['generated_at'].replace('Z', '+00:00'))
-now = datetime.now(timezone.utc)
-
-days_since_source = (now - source_last_update).days
-days_since_generated = (now - generated_at).days
-
-# Source data freshness
-if days_since_source <= 7:
-    status_text = "Données récentes"
-elif days_since_source <= 45:
-    status_text = "Données à jour"
-elif days_since_source <= 90:
-    status_text = "Potentiellement obsolètes"
-else:
-    status_text = "Données anciennes (>3 mois)"
-
-with col1:
-    st.metric(
-        "Statut des Données",
-        status_text,
-        delta=None
-    )
-    st.caption(f"Dernière mise à jour Enedis : {source_last_update.strftime('%d/%m/%Y')}")
-
-with col2:
-    st.metric(
-        "Dernière Collecte",
-        f"Il y a {days_since_generated} jour{'s' if days_since_generated > 1 else ''}",
-        delta=None
-    )
-    st.caption(f"{generated_at.strftime('%d/%m/%Y à %H:%M')} UTC")
-
-with col3:
-    st.metric(
-        "Projets Renouvelables",
-        f"{data['metadata']['renewable_records']:,}",
-        delta=None,
-        help="Nombre de projets photovoltaïques et éoliens en file d'attente de raccordement au réseau Enedis"
-    )
-    st.caption(f"Sur {data['metadata']['total_records']:,} projets au total")
-
-# Photovoltaic section
-st.markdown("## Photovoltaïque")
-
-df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
-if not df_pv.empty:
-    chart_pv, total_pv = plot_stacked_bar(df_pv)
-    st.altair_chart(chart_pv, use_container_width=True)
-    st.info(f"**Dernier trimestre :** {total_pv:.2f} GW en file d'attente")
-else:
-    st.warning("Aucune donnée photovoltaïque disponible")
-
-# Wind section
-st.markdown("## Éolien")
-
-df_wind = create_dataframe_from_data(data['data']['wind'])
-if not df_wind.empty:
-    chart_wind, total_wind = plot_stacked_bar(df_wind, show_legend=False)
-    st.altair_chart(chart_wind, use_container_width=True)
-    st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
-else:
-    st.warning("Aucune donnée éolienne disponible")
-
-# Combined total
-if not df_pv.empty and not df_wind.empty:
-    st.markdown(f"### Total Combiné : **{total_pv + total_wind:.2f} GW**")
-
-st.markdown("---")
-st.caption(f"Source : [Enedis Open Data]({data['metadata']['api_url']}) • Données traitées automatiquement chaque semaine")
+# Create tabs
+tab1, tab2, tab3 = st.tabs(["📊 PV / Éolien", "🔋 CartoStock", "⚡ Capareseau"])
 
 # ============================================================================
-# RTE CARTOSTOCK SECTION
+# TAB 1: PV / ÉOLIEN (ENEDIS QUEUE DATA)
 # ============================================================================
 
-st.markdown("")
-st.markdown("## CartoStock RTE")
-st.markdown("Capacités d'accueil pour le stockage sur le réseau de transport")
-
-# Load RTE data
-rte_data = load_rte_data()
-
-if rte_data and rte_data.get('snapshots'):
-    # RTE Data freshness
+with tab1:
+    # Data freshness indicator
     st.markdown("")
     col1, col2, col3 = st.columns(3)
 
-    generated_at_rte = datetime.fromisoformat(rte_data['generated_at'].replace('Z', '+00:00'))
-    days_since_generated_rte = (now - generated_at_rte).days
+    source_last_update = datetime.fromisoformat(data['source_last_update'].replace('Z', '+00:00'))
+    generated_at = datetime.fromisoformat(data['generated_at'].replace('Z', '+00:00'))
+    now = datetime.now(timezone.utc)
+
+    days_since_source = (now - source_last_update).days
+    days_since_generated = (now - generated_at).days
+
+    # Source data freshness
+    if days_since_source <= 7:
+        status_text = "Données récentes"
+    elif days_since_source <= 45:
+        status_text = "Données à jour"
+    elif days_since_source <= 90:
+        status_text = "Potentiellement obsolètes"
+    else:
+        status_text = "Données anciennes (>3 mois)"
 
     with col1:
         st.metric(
-            "Dernière Collecte",
-            f"Il y a {days_since_generated_rte} jour{'s' if days_since_generated_rte > 1 else ''}",
+            "Statut des Données",
+            status_text,
             delta=None
         )
-        st.caption(f"{generated_at_rte.strftime('%d/%m/%Y à %H:%M')} UTC")
+        st.caption(f"Dernière mise à jour Enedis : {source_last_update.strftime('%d/%m/%Y')}")
 
     with col2:
         st.metric(
-            "Postes Disponibles",
-            f"{rte_data['metadata']['latest_substations']:,}",
-            delta=None,
-            help="Nombre de postes RTE avec capacité d'accueil pour le stockage"
+            "Dernière Collecte",
+            f"Il y a {days_since_generated} jour{'s' if days_since_generated > 1 else ''}",
+            delta=None
         )
-        st.caption(f"{rte_data['metadata']['latest_zones']} zones gabarit")
+        st.caption(f"{generated_at.strftime('%d/%m/%Y à %H:%M')} UTC")
 
     with col3:
         st.metric(
-            "Historique",
-            f"{rte_data['metadata']['total_snapshots']} snapshots",
+            "Projets Renouvelables",
+            f"{data['metadata']['renewable_records']:,}",
             delta=None,
-            help="Nombre de collectes de données historiques"
+            help="Nombre de projets photovoltaïques et éoliens en file d'attente de raccordement au réseau Enedis"
         )
-        if rte_data.get('change_log') and len(rte_data['change_log']) > 0:
-            latest_change = rte_data['change_log'][-1]
-            st.caption(f"Dernier: {latest_change['summary']}")
+        st.caption(f"Sur {data['metadata']['total_records']:,} projets au total")
 
-    # Date selection for state map and comparison
-    st.markdown("")
-    snapshots = rte_data['snapshots']
-    snapshot_dates = [datetime.fromisoformat(s['date'].replace('Z', '+00:00')) for s in snapshots]
-    date_labels = [d.strftime('%d/%m/%Y %H:%M') for d in snapshot_dates]
+    # Photovoltaic section
+    st.markdown("## Photovoltaïque")
 
-    # Two columns for the two maps
-    st.markdown("")
-    col_map1, col_map2 = st.columns(2)
+    df_pv = create_dataframe_from_data(data['data']['photovoltaic'])
+    if not df_pv.empty:
+        chart_pv, total_pv = plot_stacked_bar(df_pv)
+        st.altair_chart(chart_pv, use_container_width=True)
+        st.info(f"**Dernier trimestre :** {total_pv:.2f} GW en file d'attente")
+    else:
+        st.warning("Aucune donnée photovoltaïque disponible")
 
-    with col_map1:
-        st.markdown("### État des Postes")
-        st.caption("Vue d'ensemble de tous les postes et leur capacité disponible")
+    # Wind section
+    st.markdown("## Éolien")
 
-        # Date selector for state map
-        if len(snapshot_dates) > 1:
-            state_date_idx = st.selectbox(
-                "📅 Date pour l'état:",
-                options=range(len(snapshots)),
-                format_func=lambda i: date_labels[i],
-                index=len(snapshots) - 1,
-                key="state_date"
-            )
-        else:
-            state_date_idx = 0
-            st.info(f"📅 Snapshot unique du {date_labels[0]} UTC")
+    df_wind = create_dataframe_from_data(data['data']['wind'])
+    if not df_wind.empty:
+        chart_wind, total_wind = plot_stacked_bar(df_wind, show_legend=False)
+        st.altair_chart(chart_wind, use_container_width=True)
+        st.info(f"**Dernier trimestre :** {total_wind:.2f} GW en file d'attente")
+    else:
+        st.warning("Aucune donnée éolienne disponible")
 
-        selected_snapshot = snapshots[state_date_idx]
+    # Combined total
+    if not df_pv.empty and not df_wind.empty:
+        st.markdown(f"### Total Combiné : **{total_pv + total_wind:.2f} GW**")
 
-        # Create and display state map with loading indicator
-        with st.spinner('Chargement de la carte...'):
-            state_map = create_rte_map(selected_snapshot)
-            st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
+    st.markdown("---")
+    st.caption(f"Source : [Enedis Open Data]({data['metadata']['api_url']}) • Données traitées automatiquement chaque semaine")
 
-        # Legend
-        st.markdown("""
-        **Légende:**
-        - 🟢 Vert : > 25 MW
-        - 🔵 Bleu : 10-25 MW
-        - 🟡 Jaune : 5-10 MW
-        - 🟠 Orange : < 5 MW
-        - ⚫ Gris : Aucune capacité
-        """)
+# ============================================================================
+# TAB 2: RTE CARTOSTOCK SECTION
+# ============================================================================
 
-    with col_map2:
-        st.markdown("### Changements")
-        st.caption("Comparer deux dates pour voir les changements")
+with tab2:
+    st.markdown("## CartoStock RTE")
+    st.markdown("Capacités d'accueil pour le stockage sur le réseau de transport")
 
-        # Date comparison selectors
-        if len(snapshot_dates) > 1:
-            col_date1, col_date2 = st.columns(2)
+    # Load RTE data
+    rte_data = load_rte_data()
 
-            with col_date1:
-                date1_idx = st.selectbox(
-                    "📅 Date 1 (avant):",
-                    options=range(len(snapshots)),
-                    format_func=lambda i: date_labels[i],
-                    index=max(0, len(snapshots) - 2),
-                    key="compare_date1"
-                )
-
-            with col_date2:
-                date2_idx = st.selectbox(
-                    "📅 Date 2 (après):",
-                    options=range(len(snapshots)),
-                    format_func=lambda i: date_labels[i],
-                    index=len(snapshots) - 1,
-                    key="compare_date2"
-                )
-
-            if date1_idx == date2_idx:
-                st.warning("⚠️ Veuillez sélectionner deux dates différentes pour la comparaison")
-            else:
-                # Compare the two selected snapshots
-                snapshot1 = snapshots[date1_idx]
-                snapshot2 = snapshots[date2_idx]
-
-                comparison_changes = compare_two_snapshots(snapshot1, snapshot2)
-
-                if comparison_changes and (comparison_changes.get('added') > 0 or
-                                          comparison_changes.get('removed') > 0 or
-                                          len(comparison_changes.get('modified', [])) > 0):
-                    # Create and display changes map with loading indicator
-                    with st.spinner('Calcul des changements...'):
-                        changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
-                        st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
-
-                    # Summary
-                    st.markdown(f"""
-                    **Résumé:**
-                    - ✅ Ajoutés: {comparison_changes['added']}
-                    - ❌ Supprimés: {comparison_changes['removed']}
-                    - 🔄 Modifiés: {len(comparison_changes.get('modified', []))}
-                    """)
-                else:
-                    st.info("Aucun changement détecté entre ces deux dates")
-        else:
-            st.info("Un seul snapshot disponible - attendez la prochaine collecte pour voir les changements")
-
-        # Legend for changes
-        st.markdown("""
-        **Légende:**
-        - 🟣 Violet : Modifié
-        - 🔴 Rouge : Supprimé
-        - 🟤 Marron : Nouveau
-        """)
-
-    # Changes table
-    if len(snapshot_dates) > 1 and 'date1_idx' in locals() and 'date2_idx' in locals() and date1_idx != date2_idx:
-        comparison_changes = compare_two_snapshots(snapshots[date1_idx], snapshots[date2_idx])
-
-        if comparison_changes and len(comparison_changes.get('modified', [])) > 0:
+    if rte_data and rte_data.get('snapshots'):
+            # RTE Data freshness
             st.markdown("")
-            st.markdown("### Détails des Modifications")
+            col1, col2, col3 = st.columns(3)
+        
+            generated_at_rte = datetime.fromisoformat(rte_data['generated_at'].replace('Z', '+00:00'))
+            days_since_generated_rte = (now - generated_at_rte).days
+        
+            with col1:
+                st.metric(
+                    "Dernière Collecte",
+                    f"Il y a {days_since_generated_rte} jour{'s' if days_since_generated_rte > 1 else ''}",
+                    delta=None
+                )
+                st.caption(f"{generated_at_rte.strftime('%d/%m/%Y à %H:%M')} UTC")
+        
+            with col2:
+                st.metric(
+                    "Postes Disponibles",
+                    f"{rte_data['metadata']['latest_substations']:,}",
+                    delta=None,
+                    help="Nombre de postes RTE avec capacité d'accueil pour le stockage"
+                )
+                st.caption(f"{rte_data['metadata']['latest_zones']} zones gabarit")
+        
+            with col3:
+                st.metric(
+                    "Historique",
+                    f"{rte_data['metadata']['total_snapshots']} snapshots",
+                    delta=None,
+                    help="Nombre de collectes de données historiques"
+                )
+                if rte_data.get('change_log') and len(rte_data['change_log']) > 0:
+                    latest_change = rte_data['change_log'][-1]
+                    st.caption(f"Dernier: {latest_change['summary']}")
+        
+            # Date selection for state map and comparison
+            st.markdown("")
+            snapshots = rte_data['snapshots']
+            snapshot_dates = [datetime.fromisoformat(s['date'].replace('Z', '+00:00')) for s in snapshots]
+            date_labels = [d.strftime('%d/%m/%Y %H:%M') for d in snapshot_dates]
+        
+            # Two columns for the two maps
+            st.markdown("")
+            col_map1, col_map2 = st.columns(2)
+        
+            with col_map1:
+                st.markdown("### État des Postes")
+                st.caption("Vue d'ensemble de tous les postes et leur capacité disponible")
+        
+                # Date selector for state map
+                if len(snapshot_dates) > 1:
+                    state_date_idx = st.selectbox(
+                        "📅 Date pour l'état:",
+                        options=range(len(snapshots)),
+                        format_func=lambda i: date_labels[i],
+                        index=len(snapshots) - 1,
+                        key="state_date"
+                    )
+                else:
+                    state_date_idx = 0
+                    st.info(f"📅 Snapshot unique du {date_labels[0]} UTC")
+        
+                selected_snapshot = snapshots[state_date_idx]
+        
+                # Create and display state map with loading indicator
+                with st.spinner('Chargement de la carte...'):
+                    state_map = create_rte_map(selected_snapshot)
+                    st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
+        
+                # Legend
+                st.markdown("""
+                **Légende:**
+                - 🟢 Vert : > 25 MW
+                - 🔵 Bleu : 10-25 MW
+                - 🟡 Jaune : 5-10 MW
+                - 🟠 Orange : < 5 MW
+                - ⚫ Gris : Aucune capacité
+                """)
+        
+            with col_map2:
+                st.markdown("### Changements")
+                st.caption("Comparer deux dates pour voir les changements")
+        
+                # Date comparison selectors
+                if len(snapshot_dates) > 1:
+                    col_date1, col_date2 = st.columns(2)
+        
+                    with col_date1:
+                        date1_idx = st.selectbox(
+                            "📅 Date 1 (avant):",
+                            options=range(len(snapshots)),
+                            format_func=lambda i: date_labels[i],
+                            index=max(0, len(snapshots) - 2),
+                            key="compare_date1"
+                        )
+        
+                    with col_date2:
+                        date2_idx = st.selectbox(
+                            "📅 Date 2 (après):",
+                            options=range(len(snapshots)),
+                            format_func=lambda i: date_labels[i],
+                            index=len(snapshots) - 1,
+                            key="compare_date2"
+                        )
+        
+                    if date1_idx == date2_idx:
+                        st.warning("⚠️ Veuillez sélectionner deux dates différentes pour la comparaison")
+                    else:
+                        # Compare the two selected snapshots
+                        snapshot1 = snapshots[date1_idx]
+                        snapshot2 = snapshots[date2_idx]
+        
+                        comparison_changes = compare_two_snapshots(snapshot1, snapshot2)
+        
+                        if comparison_changes and (comparison_changes.get('added') > 0 or
+                                                  comparison_changes.get('removed') > 0 or
+                                                  len(comparison_changes.get('modified', [])) > 0):
+                            # Create and display changes map with loading indicator
+                            with st.spinner('Calcul des changements...'):
+                                changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
+                                st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
+        
+                            # Summary
+                            st.markdown(f"""
+                            **Résumé:**
+                            - ✅ Ajoutés: {comparison_changes['added']}
+                            - ❌ Supprimés: {comparison_changes['removed']}
+                            - 🔄 Modifiés: {len(comparison_changes.get('modified', []))}
+                            """)
+                        else:
+                            st.info("Aucun changement détecté entre ces deux dates")
+                else:
+                    st.info("Un seul snapshot disponible - attendez la prochaine collecte pour voir les changements")
+        
+                # Legend for changes
+                st.markdown("""
+                **Légende:**
+                - 🟣 Violet : Modifié
+                - 🔴 Rouge : Supprimé
+                - 🟤 Marron : Nouveau
+                """)
+        
+            # Changes table
+            if len(snapshot_dates) > 1 and 'date1_idx' in locals() and 'date2_idx' in locals() and date1_idx != date2_idx:
+                comparison_changes = compare_two_snapshots(snapshots[date1_idx], snapshots[date2_idx])
+        
+                if comparison_changes and len(comparison_changes.get('modified', [])) > 0:
+                    st.markdown("")
+                    st.markdown("### Détails des Modifications")
+        
+                    changes_list = []
+                    for change in comparison_changes['modified']:
+                        for field, vals in change.get('changes', {}).items():
+                            if vals['old'] != vals['new']:
+                                changes_list.append({
+                                    'Poste': change.get('ADRPoste', 'N/A'),
+                                    'Commune': change.get('NomCommune', 'N/A'),
+                                    'Champ': field,
+                                    'Ancienne Valeur': vals['old'],
+                                    'Nouvelle Valeur': vals['new']
+                                })
+        
+                    if changes_list:
+                        df_changes = pd.DataFrame(changes_list)
+                        st.dataframe(df_changes, use_container_width=True, hide_index=True)
+        
+    else:
+        st.info("Les données RTE CartoStock ne sont pas encore disponibles. Elles seront ajoutées lors de la prochaine collecte automatique.")
 
-            changes_list = []
-            for change in comparison_changes['modified']:
-                for field, vals in change.get('changes', {}).items():
-                    if vals['old'] != vals['new']:
-                        changes_list.append({
-                            'Poste': change.get('ADRPoste', 'N/A'),
-                            'Commune': change.get('NomCommune', 'N/A'),
-                            'Champ': field,
-                            'Ancienne Valeur': vals['old'],
-                            'Nouvelle Valeur': vals['new']
-                        })
+    # Footer
+    st.markdown("")
+    st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement **chaque jour à 6h30 UTC**")
 
-            if changes_list:
-                df_changes = pd.DataFrame(changes_list)
-                st.dataframe(df_changes, use_container_width=True, hide_index=True)
+# ============================================================================
+# TAB 3: CAPARESEAU SECTION
+# ============================================================================
 
-else:
-    st.info("Les données RTE CartoStock ne sont pas encore disponibles. Elles seront ajoutées lors de la prochaine collecte automatique.")
+with tab3:
+    st.markdown("## Capareseau")
+    st.markdown("Capacités d'accueil aux réseaux de transport et de distribution")
 
-# Footer
-st.markdown("")
-st.caption("Source RTE : [CartoStock](https://cartostock.cloud-rte-france.com/) • Données collectées automatiquement **chaque jour à 6h30 UTC**")
+    # Load Capareseau data
+    capareseau_data = load_capareseau_data()
+
+    if capareseau_data and capareseau_data.get('snapshots'):
+        # Capareseau Data freshness
+        st.markdown("")
+        col1, col2, col3 = st.columns(3)
+
+        generated_at_cap = datetime.fromisoformat(capareseau_data['generated_at'].replace('Z', '+00:00'))
+        days_since_generated_cap = (datetime.now(timezone.utc) - generated_at_cap).days
+
+        with col1:
+            st.metric(
+                "Dernière Collecte",
+                f"Il y a {days_since_generated_cap} jour{'s' if days_since_generated_cap > 1 else ''}",
+                delta=None
+            )
+            st.caption(f"{generated_at_cap.strftime('%d/%m/%Y à %H:%M')} UTC")
+
+        with col2:
+            st.metric(
+                "Postes Disponibles",
+                f"{capareseau_data['metadata']['latest_substations']:,}",
+                delta=None,
+                help="Nombre de postes avec capacité d'accueil pour raccordement production"
+            )
+            st.caption("12 régions françaises")
+
+        with col3:
+            st.metric(
+                "Historique",
+                f"{capareseau_data['metadata']['total_snapshots']} snapshots",
+                delta=None,
+                help="Nombre de collectes de données historiques"
+            )
+            if capareseau_data.get('change_log') and len(capareseau_data['change_log']) > 0:
+                latest_change = capareseau_data['change_log'][-1]
+                st.caption(f"Dernier: {latest_change['summary']}")
+
+        st.markdown("")
+        st.info("📍 Visualisation cartographique en cours de développement. Les données sont collectées et historisées quotidiennement.")
+
+        # Show latest snapshot summary
+        if capareseau_data.get('latest_snapshot'):
+            latest = capareseau_data['latest_snapshot']
+            st.markdown("### Dernières Données")
+
+            # Show sample of substations
+            if latest.get('substations') and len(latest['substations']) > 0:
+                st.markdown(f"**{len(latest['substations'])} postes sources** collectés")
+
+                # Create a sample dataframe
+                sample_subs = latest['substations'][:10]
+                df_sample = pd.DataFrame([{
+                    'Nom': s.get('name', 'N/A'),
+                    'Code': s.get('code', 'N/A'),
+                    'Région': s.get('territory_name', 'N/A'),
+                    'Type HTB': s.get('htb_type', 'N/A'),
+                    'Capacité Réservée (CR)': s.get('values', {}).get('INFO_CR', 'N/A'),
+                    'Taux': s.get('values', {}).get('INFO_TX', 'N/A')
+                } for s in sample_subs])
+
+                st.dataframe(df_sample, use_container_width=True, hide_index=True)
+                st.caption(f"Aperçu des 10 premiers postes (sur {len(latest['substations'])} total)")
+
+    else:
+        st.info("Les données Capareseau ne sont pas encore disponibles. Elles seront ajoutées lors de la prochaine collecte automatique.")
+
+    # Footer
+    st.markdown("")
+    st.caption("Source : [Capareseau](https://www.capareseau.fr/) • Données collectées automatiquement **chaque jour à 6h30 UTC**")
