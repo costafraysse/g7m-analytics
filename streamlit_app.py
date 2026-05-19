@@ -890,6 +890,10 @@ def create_capareseau_map(snapshot_data, center_lat=46.603354, center_lon=1.8883
         htb_type = sub.get('htb_type', 'N/A')
 
         values = sub.get('values', {})
+        # Handle case where values might not be a dict
+        if not isinstance(values, dict):
+            values = {}
+
         capacity_reserved = values.get('INFO_CR', 'N/A')
         rate = values.get('INFO_TX', 'N/A')
         availability = values.get('INFO_NA', 'N/A')
