@@ -1354,7 +1354,7 @@ with tab2:
                 # Create and display state map with loading indicator
                 with st.spinner('Chargement de la carte...'):
                     state_map = create_rte_map(selected_snapshot)
-                    st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}")
+                    st_folium(state_map, width=550, height=500, key=f"state_map_{state_date_idx}", returned_objects=[])
         
                 # Legend
                 st.markdown("""
@@ -1407,7 +1407,7 @@ with tab2:
                             # Create and display changes map with loading indicator
                             with st.spinner('Calcul des changements...'):
                                 changes_map = create_rte_changes_map(comparison_changes, snapshot2, snapshot1)
-                                st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}")
+                                st_folium(changes_map, width=550, height=500, key=f"changes_map_{date1_idx}_{date2_idx}", returned_objects=[])
         
                             # Summary
                             st.markdown(f"""
