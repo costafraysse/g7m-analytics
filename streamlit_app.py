@@ -1312,7 +1312,20 @@ with tab2:
             # Date selection for state map and comparison
             st.markdown("")
             snapshots = rte_data['snapshots']
-            snapshot_dates = [datetime.fromisoformat(s['date'].replace('Z', '+00:00')) for s in snapshots]
+            # Parse dates with error handling for malformed timestamps
+            snapshot_dates = []
+            for s in snapshots:
+                try:
+                    date_str = s['date']
+                    # Handle malformed dates with double timezone suffix
+                    if '+00:00+00:00' in date_str:
+                        date_str = date_str.replace('+00:00+00:00', '')
+                    if '+00:00Z' in date_str:
+                        date_str = date_str.replace('+00:00Z', 'Z')
+                    snapshot_dates.append(datetime.fromisoformat(date_str.replace('Z', '+00:00')))
+                except:
+                    # Use a placeholder date if parsing fails
+                    snapshot_dates.append(datetime.now())
             date_labels = [d.strftime('%d/%m/%Y %H:%M') for d in snapshot_dates]
         
             # Two columns for the two maps
@@ -1501,21 +1514,25 @@ with tab3:
         if capareseau_data and capareseau_data.get('snapshots'):
             snapshots = capareseau_data['snapshots']
 
-            # Debug: Show snapshot count
-            st.info(f"🔍 Debug: {len(snapshots)} snapshots trouvés")
-
             # Parse snapshot dates
             snapshot_dates = []
             for s in snapshots:
                 try:
                     date_str = s.get('date', '')
                     if date_str:
+                        # Handle malformed dates with double timezone suffix
+                        # Replace double +00:00+00:00 or +00:00Z with just Z
+                        if '+00:00+00:00' in date_str:
+                            date_str = date_str.replace('+00:00+00:00', '')
+                        if '+00:00Z' in date_str:
+                            date_str = date_str.replace('+00:00Z', 'Z')
+
                         dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                         snapshot_dates.append(dt)
                     else:
                         snapshot_dates.append(None)
-                except Exception as e:
-                    st.warning(f"⚠️ Date parsing error: {e} for date: {s.get('date', 'N/A')}")
+                except:
+                    # Use placeholder for malformed dates
                     snapshot_dates.append(None)
 
             date_labels = [d.strftime('%d/%m/%Y %H:%M') if d else 'N/A' for d in snapshot_dates]
@@ -1577,17 +1594,9 @@ with tab3:
 
                 # Create and display state map
                 if display_snapshot and display_snapshot.get('substations'):
-                    st.info(f"🔍 Debug: Creating map with {len(display_snapshot.get('substations', []))} substations")
-                    try:
-                        with st.spinner('Chargement de la carte...'):
-                            state_map = create_capareseau_map(display_snapshot)
-                            st.info("🔍 Debug: Map created, rendering with st_folium...")
-                            st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}", returned_objects=[])
-                            st.success("✓ Map rendered successfully")
-                    except Exception as e:
-                        st.error(f"❌ Error creating/rendering map: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+                    with st.spinner('Chargement de la carte...'):
+                        state_map = create_capareseau_map(display_snapshot)
+                        st_folium(state_map, width=550, height=500, key=f"capareseau_state_map_{state_date_idx}", returned_objects=[])
 
                     # Legend
                     st.markdown("""
