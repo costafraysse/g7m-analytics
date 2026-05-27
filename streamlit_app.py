@@ -250,7 +250,7 @@ def reconstruct_snapshot_from_deltas(base_snapshot, snapshots, target_index):
     }
 
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def load_rte_data():
     """Load RTE CartoStock data from GitHub Gist or local file (supports v1.0 and v2.0 formats)."""
     try:
@@ -301,7 +301,7 @@ def load_rte_data():
         return None
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def load_capareseau_data():
     """Load Capareseau data from GitHub Gist or local file."""
     try:
@@ -825,30 +825,26 @@ def create_rte_changes_map(changes_data, snapshot_data, previous_snapshot_data=N
 
 def get_capareseau_capacity_color(capacity_value):
     """
-    Get marker color based on Capareseau reserved capacity (INFO_CR).
-
-    Args:
-        capacity_value: Capacity value (string or number)
-
-    Returns:
-        Color string for Folium marker
+    Get marker color from INFO_CR — "Capacité d'accueil au titre du S3REnR
+    qui reste à affecter" (MW). Stored as a numeric string like "0.7" or "12.5";
+    bins match the RTE Cartostock layer so the two maps are visually comparable.
     """
-    if not capacity_value or capacity_value == 'null' or capacity_value == 'N/A':
+    if capacity_value is None or capacity_value == 'null' or capacity_value == 'N/A':
         return 'gray'
 
-    capacity_str = str(capacity_value).upper()
+    try:
+        mw = float(str(capacity_value).replace(',', '.').strip())
+    except (ValueError, TypeError):
+        return 'gray'
 
-    # Color scheme matching RTE for consistency
-    if '< 5' in capacity_str or capacity_str.startswith('0'):
+    if mw < 5:
         return 'orange'
-    elif '5' in capacity_str and '10' in capacity_str:
+    elif mw < 10:
         return 'yellow'
-    elif '10' in capacity_str and '25' in capacity_str:
+    elif mw < 25:
         return 'blue'
-    elif '> 25' in capacity_str or '>= 25' in capacity_str:
-        return 'green'
     else:
-        return 'gray'
+        return 'green'
 
 
 def create_capareseau_map(snapshot_data, center_lat=46.603354, center_lon=1.888334, zoom_start=6):
@@ -913,7 +909,7 @@ def create_capareseau_map(snapshot_data, center_lat=46.603354, center_lon=1.8883
             <p style="margin: 2px 0; font-size: 0.9em; color: #6e6e73;"><strong>Région:</strong> {territory}</p>
             <p style="margin: 2px 0; font-size: 0.9em; color: #6e6e73;"><strong>Type HTB:</strong> {htb_type}</p>
             <hr style="margin: 8px 0; border: none; border-top: 1px solid #d2d2d7;">
-            <p style="margin: 2px 0;"><strong>Capacité Réservée (CR):</strong> {capacity_reserved}</p>
+            <p style="margin: 2px 0;"><strong>Capacité d'accueil S3REnR à affecter:</strong> {capacity_reserved} MW</p>
             <p style="margin: 2px 0;"><strong>Taux (TX):</strong> {rate}</p>
             <p style="margin: 2px 0;"><strong>Disponibilité (NA):</strong> {availability}</p>
             <hr style="margin: 8px 0; border: none; border-top: 1px solid #d2d2d7;">
